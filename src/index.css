@@ -227,6 +227,100 @@ body {
   overflow: auto;
   position: relative;
   padding: 24px;
+  min-height: 0;
+}
+
+.schematic-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 620px;
+}
+
+.schematic-heading,
+.schematic-counts,
+.schematic-legend {
+  display: flex;
+  align-items: center;
+}
+
+.schematic-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.schematic-heading h2 {
+  font-size: 1.2rem;
+  font-weight: 650;
+}
+
+.schematic-heading p,
+.schematic-description {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.schematic-heading p {
+  margin-top: 3px;
+}
+
+.schematic-counts {
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.schematic-legend {
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  color: var(--text-main);
+  font-size: 0.8rem;
+}
+
+.schematic-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.schematic-legend i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.schematic-legend-note {
+  color: var(--text-muted);
+}
+
+.schematic-canvas {
+  position: relative;
+  flex: 1 0 480px;
+  min-height: 480px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0a0c10;
+}
+
+@media (max-width: 700px) {
+  .schematic-viewer {
+    min-height: 560px;
+  }
+
+  .schematic-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .schematic-counts {
+    justify-content: flex-start;
+  }
+
+  .schematic-canvas {
+    flex-basis: 420px;
+    min-height: 420px;
+  }
 }
 
 ::-webkit-scrollbar {

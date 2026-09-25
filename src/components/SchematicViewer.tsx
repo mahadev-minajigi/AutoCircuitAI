@@ -14,7 +14,7 @@ interface SchematicViewerProps {
 }
 
 const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
-  const { nodes, edges } = useMemo(() => {
+  const { nodes, edges, netCount } = useMemo(() => {
     const mcu = design.components.find(component => component.category === 'MCU');
     const peripherals = design.components.filter(component => component.id !== mcu?.id);
     const netColors: Record<string, string> = {
@@ -138,25 +138,36 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
       });
     });
 
-    return { nodes: [...componentNodes, ...netNodes], edges: netEdges };
+    return { nodes: [...componentNodes, ...netNodes], edges: netEdges, netCount: groups.size };
   }, [design]);
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '1.2rem', fontWeight: 600 }}>Interactive Schematic View</h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
+    <section className="schematic-viewer" aria-label={`${design.title} circuit diagram`}>
+      <div className="schematic-heading">
+        <div>
+          <h2>Circuit Diagram</h2>
+          <p>{design.title}</p>
+        </div>
+        <div className="schematic-counts">
           <span className="badge badge-cyan">{design.components.length} Components</span>
-          <span className="badge badge-emerald">{design.pinMappings.length} Nets</span>
+          <span className="badge badge-emerald">{netCount} Nets</span>
         </div>
       </div>
-      <p style={{ color: 'var(--text-muted)' }}>{design.description}</p>
-      
-      <div style={{ flex: 1, borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', background: '#0a0c10' }}>
+      <p className="schematic-description">{design.description}</p>
+      <div className="schematic-legend" aria-label="Wire color legend">
+        <span><i style={{ background: '#ef5350' }} />3.3V power</span>
+        <span><i style={{ background: '#9aa4b2' }} />Ground</span>
+        <span><i style={{ background: '#ffb74d' }} />I²C data and clock</span>
+        <span className="schematic-legend-note">Use the controls to zoom; drag the canvas to inspect connections.</span>
+      </div>
+
+      <div className="schematic-canvas">
         <ReactFlow 
           nodes={nodes} 
           edges={edges}
           fitView
+          fitViewOptions={{ padding: 0.2, minZoom: 0.45, maxZoom: 1.15 }}
+          minZoom={0.35}
           attributionPosition="bottom-right"
         >
           <Background color="rgba(0, 240, 255, 0.1)" gap={20} />
@@ -168,7 +179,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           />
         </ReactFlow>
       </div>
-    </div>
+    </section>
   );
 };
 
