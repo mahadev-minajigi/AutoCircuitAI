@@ -457,11 +457,21 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 560px;
 }
 
 .pcb-layout-frame {
   position: relative;
-  flex: 1;
-  min-height: 480px;
+  flex: 0 0 auto;
+  width: 100%;
+  height: clamp(440px, 62vh, 720px);
+}
+
+.pcb-layout-frame .circuit-canvas {
+  display: block;
+}
+
+@media (max-width: 700px) {
+  .pcb-layout-frame {
+    height: 440px;
+  }
 }
