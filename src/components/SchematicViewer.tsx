@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import type { CircuitDesign } from '../types/circuit';
 import ReactFlow, { 
   Background, 
@@ -14,6 +15,8 @@ interface SchematicViewerProps {
 }
 
 const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const { nodes, edges, netCount } = useMemo(() => {
     const mcu = design.components.find(component => component.category === 'MCU');
     const peripherals = design.components.filter(component => component.id !== mcu?.id);
@@ -141,6 +144,26 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
     return { nodes: [...componentNodes, ...netNodes], edges: netEdges, netCount: groups.size };
   }, [design]);
 
+  useEffect(() => {
+    const updateFullscreenState = () => {
+      setIsFullscreen(document.fullscreenElement === canvasRef.current);
+    };
+
+    document.addEventListener('fullscreenchange', updateFullscreenState);
+    return () => document.removeEventListener('fullscreenchange', updateFullscreenState);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (document.fullscreenElement === canvas) {
+      await document.exitFullscreen();
+    } else {
+      await canvas.requestFullscreen();
+    }
+  };
+
   return (
     <section className="schematic-viewer" aria-label={`${design.title} circuit diagram`}>
       <div className="schematic-heading">
@@ -161,7 +184,16 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         <span className="schematic-legend-note">Use the controls to zoom; drag the canvas to inspect connections.</span>
       </div>
 
-      <div className="schematic-canvas">
+      <div className="schematic-canvas" ref={canvasRef}>
+        <button
+          className="schematic-fullscreen-toggle"
+          type="button"
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? 'Exit fullscreen schematic' : 'View schematic fullscreen'}
+          title={isFullscreen ? 'Exit fullscreen' : 'View fullscreen'}
+        >
+          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+        </button>
         <ReactFlow 
           nodes={nodes} 
           edges={edges}
