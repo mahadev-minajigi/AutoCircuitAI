@@ -7,7 +7,7 @@ import ReactFlow, {
   MiniMap,
   Position
 } from 'reactflow';
-import type { Node, Edge } from 'reactflow';
+import type { Edge, Node, ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 interface SchematicViewerProps {
@@ -16,6 +16,7 @@ interface SchematicViewerProps {
 
 const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const flowRef = useRef<ReactFlowInstance | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const { nodes, edges, netCount } = useMemo(() => {
     const mcu = design.components.find(component => component.category === 'MCU');
@@ -153,6 +154,13 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
     return () => document.removeEventListener('fullscreenchange', updateFullscreenState);
   }, []);
 
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      flowRef.current?.fitView({ padding: 0.2, minZoom: 0.45, maxZoom: 1.15 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isFullscreen]);
+
   const toggleFullscreen = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -200,6 +208,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           fitView
           fitViewOptions={{ padding: 0.2, minZoom: 0.45, maxZoom: 1.15 }}
           minZoom={0.35}
+          onInit={instance => { flowRef.current = instance; }}
           attributionPosition="bottom-right"
         >
           <Background color="rgba(0, 240, 255, 0.1)" gap={20} />
