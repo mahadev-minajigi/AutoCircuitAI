@@ -1,32 +1,99 @@
-# React + TypeScript + Vite
+# AutoCircuit AI
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+AutoCircuit AI is an AI-assisted hardware design prototype that converts natural-language hardware requirements into an initial electronic design. The system helps users describe a project in simple English and then generates a basic design workflow that includes component selection, circuit connections, pin mapping, BOM generation, starter firmware, rule-based DRC checks, and a PCB preview.
 
-Currently, two official plugins are available:
+Live demo: https://auto-circuit-ai.vercel.app/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Project Goal
 
-## React Compiler
+The main objective of AutoCircuit AI is to reduce the time and effort needed for early-stage electronic prototyping. Instead of manually designing the entire circuit from scratch, users can describe the requirement and receive a structured starting point for supported hardware scenarios.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+This project is designed as a prototype and educational proof-of-concept. It is not a full professional EDA replacement, but it demonstrates how AI-assisted design generation can support beginner-friendly electronics design and rapid concept validation.
 
-## Expanding the Oxlint configuration
+## Current Prototype Capabilities
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+The prototype currently demonstrates the following:
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+- Natural-language hardware requirement input
+- Requirement interpretation for supported use cases
+- Component selection for common embedded designs
+- Auto-generated circuit connection suggestions
+- MCU-to-component pin mapping
+- Bill of Materials (BOM) generation
+- Rule-based electrical validation using basic DRC checks
+- Starter firmware generation
+- Simple PCB layout preview
+
+## Example Supported Use Case
+
+Example prompt:
+
+> Design a temperature, humidity and pressure monitoring system using ESP32, BME280 and OLED display.
+
+The current system generates a consistent demo based on this prompt, including:
+
+- ESP32-based design
+- BME280 sensor selection
+- OLED display integration
+- I2C communication mapping
+- BOM list with estimated cost
+- firmware starter code
+- DRC validation output
+- PCB preview
+
+## Workflow
+
+User Prompt
+→ Requirement Analysis
+→ Component Selection
+→ Circuit Generation
+→ Pin Mapping
+→ DRC Validation
+→ BOM
+→ Firmware
+→ PCB Preview
+
+## Project Scope and Limitations
+
+AutoCircuit AI is intentionally focused on the prototype stage. It is best described as:
+
+- AI-assisted hardware design and circuit generation
+- Rule-based electrical validation
+- Educational and prototype-focused EDA assistance
+
+It does not claim to be a full autonomous professional PCB designer or manufacturing-grade tool. The current system is built to support initial concept generation and learning-oriented hardware design workflows.
+
+## Tech Stack
+
+- React
+- TypeScript
+- Vite
+- CSS-based UI
+- Component-driven design interface
+
+## Run Locally
+
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Then open the local Vite URL in the browser.
+
+## Build
+
+```bash
+npm run build
+```
+
+## Project Status
+
+This project is a first-review prototype demonstrating the core concept of AI-assisted electronics design generation. The current implementation focuses on clarity, consistency, and a real demo flow that can be shown to reviewers without overstating the project scope.
+
+## Repository
+
+GitHub: https://github.com/mahadev-minajigi/AutoCircuitAI.git
+
+## Live Deployment
+
+https://auto-circuit-ai.vercel.app/
