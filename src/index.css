@@ -5,14 +5,14 @@
   --border-color: #2b303b;
   --text-main: #e2e8f0;
   --text-muted: #8b949e;
-  
+
   --accent-cyan: #00f0ff;
   --accent-cyan-dim: rgba(0, 240, 255, 0.15);
-  
+
   --accent-emerald: #00ff88;
   --accent-amber: #ffb800;
   --accent-rose: #ff3366;
-  
+
   --font-main: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
@@ -29,7 +29,7 @@ body {
   font-family: var(--font-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-image: 
+  background-image:
     linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
   background-size: 30px 30px;
@@ -38,7 +38,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Glassmorphic Panels */
 .glass-panel {
   background: var(--bg-panel-glass);
   backdrop-filter: blur(12px);
@@ -48,7 +47,6 @@ body {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-/* Buttons */
 .btn-primary {
   background: var(--accent-cyan-dim);
   color: var(--accent-cyan);
@@ -91,7 +89,6 @@ body {
   border-color: var(--text-muted);
 }
 
-/* Layout */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -114,7 +111,6 @@ body {
   overflow: hidden;
 }
 
-/* Sidebar / Prompt Studio */
 .sidebar {
   width: 380px;
   border-right: 1px solid var(--border-color);
@@ -124,7 +120,6 @@ body {
   backdrop-filter: blur(10px);
 }
 
-/* Workspace */
 .workspace {
   flex: 1;
   display: flex;
@@ -132,7 +127,70 @@ body {
   background: transparent;
 }
 
-/* Tabs */
+.project-summary-box {
+  margin: 20px 24px 0;
+  background: rgba(0, 240, 255, 0.06);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.project-summary-tag {
+  display: inline-block;
+  background: rgba(0, 240, 255, 0.12);
+  color: var(--accent-cyan);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.project-summary-box p {
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-size: 0.94rem;
+}
+
+.workflow-indicator {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 24px 0;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--text-main);
+  font-size: 0.8rem;
+}
+
+.workflow-step.last {
+  border-color: var(--accent-cyan);
+}
+
+.workflow-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-cyan-dim);
+  color: var(--accent-cyan);
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
 .tabs-header {
   display: flex;
   border-bottom: 1px solid var(--border-color);
@@ -171,7 +229,6 @@ body {
   padding: 24px;
 }
 
-/* Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -187,7 +244,6 @@ body {
   background: var(--text-muted);
 }
 
-/* Inputs */
 .textarea-glass {
   width: 100%;
   background: rgba(0, 0, 0, 0.2);
@@ -207,7 +263,16 @@ body {
   box-shadow: 0 0 0 1px var(--accent-cyan-dim);
 }
 
-/* Labels & Tags */
+.project-description-box {
+  background: rgba(0, 255, 136, 0.05);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  padding: 14px 16px;
+  font-size: 0.9rem;
+}
+
 .badge {
   padding: 4px 8px;
   border-radius: 4px;
@@ -220,7 +285,6 @@ body {
 .badge-emerald { background: rgba(0, 255, 136, 0.15); color: var(--accent-emerald); }
 .badge-amber { background: rgba(255, 184, 0, 0.15); color: var(--accent-amber); }
 
-/* SVG Canvas styles */
 .circuit-canvas {
   width: 100%;
   height: 100%;
