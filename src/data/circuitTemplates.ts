@@ -76,9 +76,9 @@ void loop() {
     title: 'STM32 Drone Flight Controller',
     description: 'High-performance flight controller using STM32F405, MPU6000 IMU, and Betaflight standard layout.',
     components: [
-      { id: 'u1', name: 'STM32F405RGT6', description: 'ARM Cortex-M4 MCU 168MHz', category: 'MCU', package: 'LQFP-64', estimatedCost: 6.50, pins: ['3V3', 'GND', 'PA5', 'PA6', 'PA7', 'PA4'], operatingVoltage: 3.3 },
-      { id: 's1', name: 'MPU6000', description: '6-Axis Gyro/Accel (SPI)', category: 'Sensor', package: 'QFN-24', estimatedCost: 5.20, pins: ['VCC', 'GND', 'SCLK', 'MISO', 'MOSI', 'CS'], operatingVoltage: 3.3, maxCurrent_mA: 4 },
-      { id: 'p1', name: 'LDO 3.3V', description: 'Voltage Regulator 500mA', category: 'Power', package: 'SOT-223', estimatedCost: 0.45, pins: ['VIN', 'GND', 'VOUT'] },
+      { id: 'u1', name: 'STM32F405RGT6', description: 'ARM Cortex-M4 MCU 168MHz', category: 'MCU', package: 'LQFP-64', estimatedCost: 650.00, pins: ['3V3', 'GND', 'PA5', 'PA6', 'PA7', 'PA4'], operatingVoltage: 3.3 },
+      { id: 's1', name: 'MPU6000', description: '6-Axis Gyro/Accel (SPI)', category: 'Sensor', package: 'QFN-24', estimatedCost: 520.00, pins: ['VCC', 'GND', 'SCLK', 'MISO', 'MOSI', 'CS'], operatingVoltage: 3.3, maxCurrent_mA: 4 },
+      { id: 'p1', name: 'LDO 3.3V', description: 'Voltage Regulator 500mA', category: 'Power', package: 'SOT-223', estimatedCost: 45.00, pins: ['VIN', 'GND', 'VOUT'] },
     ],
     pinMappings: [
       { mcuPin: '3V3', componentId: 's1', componentPin: 'VCC', protocol: 'Power', description: '3.3V Power to IMU' },
@@ -108,9 +108,9 @@ void loop() {
     title: 'RP2040 MIDI Synthesizer',
     description: 'A wavetable synthesizer using Raspberry Pi Pico, standard MIDI DIN input, and I2S DAC.',
     components: [
-      { id: 'u1', name: 'RP2040 (Pi Pico)', description: 'Dual-core ARM Cortex-M0+', category: 'MCU', package: 'Module', estimatedCost: 4.00, pins: ['3V3', 'GND', 'GP0', 'GP1', 'GP26'], operatingVoltage: 3.3 },
-      { id: 'u2', name: 'PCM5102A', description: 'I2S Audio DAC', category: 'Actuator', package: 'Module', estimatedCost: 3.50, pins: ['VIN', 'GND', 'BCK', 'DIN', 'LCK'], operatingVoltage: 3.3 },
-      { id: 'u3', name: '6N137', description: 'High-speed Optocoupler (MIDI In)', category: 'Passive', package: 'DIP-8', estimatedCost: 0.80, pins: ['VCC', 'GND', 'OUT'], operatingVoltage: 5.0 }
+      { id: 'u1', name: 'RP2040 (Pi Pico)', description: 'Dual-core ARM Cortex-M0+', category: 'MCU', package: 'Module', estimatedCost: 400.00, pins: ['3V3', 'GND', 'GP0', 'GP1', 'GP26'], operatingVoltage: 3.3 },
+      { id: 'u2', name: 'PCM5102A', description: 'I2S Audio DAC', category: 'Actuator', package: 'Module', estimatedCost: 350.00, pins: ['VIN', 'GND', 'BCK', 'DIN', 'LCK'], operatingVoltage: 3.3 },
+      { id: 'u3', name: '6N137', description: 'High-speed Optocoupler (MIDI In)', category: 'Passive', package: 'DIP-8', estimatedCost: 80.00, pins: ['VCC', 'GND', 'OUT'], operatingVoltage: 5.0 }
     ],
     pinMappings: [
       { mcuPin: '3V3', componentId: 'u2', componentPin: 'VIN', protocol: 'Power', description: 'Power to DAC' },

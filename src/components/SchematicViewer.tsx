@@ -4,8 +4,7 @@ import ReactFlow, {
   Background, 
   Controls, 
   MiniMap,
-  Position,
-  MarkerType
+  Position
 } from 'reactflow';
 import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -15,65 +14,131 @@ interface SchematicViewerProps {
 }
 
 const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
-  // Convert design.components to ReactFlow Nodes
-  const nodes: Node[] = useMemo(() => {
-    return design.components.map((comp, index) => {
-      // Basic layout math for mock arrangement
-      const isMCU = comp.category === 'MCU';
-      const xPos = isMCU ? 400 : (index % 2 === 0 ? 100 : 700);
-      const yPos = isMCU ? 200 : 100 + (index * 80);
-      
+  const { nodes, edges } = useMemo(() => {
+    const mcu = design.components.find(component => component.category === 'MCU');
+    const peripherals = design.components.filter(component => component.id !== mcu?.id);
+    const netColors: Record<string, string> = {
+      Power: '#ef5350',
+      GND: '#9aa4b2',
+      I2C: '#ffb74d',
+      SPI: '#4fc3f7',
+      UART: '#ba9cff',
+    };
+    const componentNodes: Node[] = design.components.map((component, index) => {
+      const isMCU = component.id === mcu?.id;
+      const y = isMCU ? Math.max(80, peripherals.length * 90) : 40 + index * 180;
+
       return {
-        id: comp.id,
-        position: { x: xPos, y: yPos },
-        data: { 
+        id: component.id,
+        position: { x: isMCU ? 20 : 760, y },
+        data: {
           label: (
-            <div style={{ padding: '8px', textAlign: 'center' }}>
-              <div style={{ fontWeight: 'bold', color: isMCU ? '#00f0ff' : '#e2e8f0' }}>{comp.name}</div>
-              <div style={{ fontSize: '10px', color: '#8b949e' }}>{comp.category}</div>
+            <div style={{ padding: '10px', textAlign: 'center', minWidth: 150 }}>
+              <div style={{ fontWeight: 700, color: isMCU ? '#00d9e8' : '#e2e8f0' }}>{component.name}</div>
+              <div style={{ fontSize: 10, color: '#aab4c0', margin: '4px 0' }}>{component.category}</div>
+              <div style={{ fontSize: 10, color: '#d5dbe3' }}>{component.pins.join('  ·  ')}</div>
             </div>
-          ) 
+          )
         },
         style: {
           background: 'var(--bg-panel)',
           border: `1px solid ${isMCU ? 'var(--accent-cyan)' : 'var(--border-color)'}`,
-          borderRadius: '8px',
+          borderRadius: 6,
           color: 'var(--text-main)',
-          boxShadow: isMCU ? '0 0 15px rgba(0,240,255,0.2)' : 'none',
-          width: 150,
+          boxShadow: isMCU ? '0 0 15px rgba(0,217,232,0.18)' : 'none',
+          width: 210,
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
       };
     });
-  }, [design]);
 
-  // Convert design.pinMappings to ReactFlow Edges
-  const edges: Edge[] = useMemo(() => {
-    const mcuNode = design.components.find(c => c.category === 'MCU');
-    if (!mcuNode) return [];
-
-    return design.pinMappings.map((pin) => {
-      let strokeColor = '#8b949e'; // default
-      if (pin.protocol === 'Power') strokeColor = '#00ff88';
-      if (pin.protocol === 'GND') strokeColor = '#2b303b';
-      if (pin.protocol === 'I2C' || pin.protocol === 'SPI') strokeColor = '#ffb800';
-
-      return {
-        id: `e-${pin.mcuPin}-${pin.componentId}-${pin.componentPin}`,
-        source: mcuNode.id,
-        target: pin.componentId,
-        label: `${pin.mcuPin} → ${pin.componentPin}`,
-        labelStyle: { fill: strokeColor, fontWeight: 700, fontSize: 12 },
-        labelBgStyle: { fill: 'var(--bg-panel)', color: '#fff', fillOpacity: 0.8 },
-        animated: pin.protocol === 'I2C' || pin.protocol === 'SPI' || pin.protocol === 'UART',
-        style: { stroke: strokeColor, strokeWidth: 2 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: strokeColor,
-        },
-      };
+    const groups = new Map<string, typeof design.pinMappings>();
+    design.pinMappings.forEach(mapping => {
+      const key = `${mapping.protocol}:${mapping.mcuPin}:${mapping.componentPin}`;
+      groups.set(key, [...(groups.get(key) ?? []), mapping]);
     });
+
+    const netNodes: Node[] = [];
+    const netEdges: Edge[] = [];
+    let sharedNetIndex = 0;
+    groups.forEach((mappings, key) => {
+      const mapping = mappings[0];
+      const color = netColors[mapping.protocol] ?? '#9aa4b2';
+      const shared = mappings.length > 1;
+      const showJunction = shared || ['Power', 'GND'].includes(mapping.protocol);
+      const netId = `net-${key.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+      const netLabel = mapping.protocol === 'Power'
+        ? `${mapping.mcuPin} POWER`
+        : mapping.protocol === 'GND'
+          ? 'GND'
+          : ['SDA', 'SCL'].includes(mapping.componentPin)
+            ? `${mapping.protocol} ${mapping.componentPin}`
+            : `${mapping.protocol} ${mapping.mcuPin}`;
+
+      if (showJunction) {
+        const netY = 35 + sharedNetIndex * 88;
+        sharedNetIndex += 1;
+        netNodes.push({
+          id: netId,
+          position: { x: 405, y: netY },
+          data: { label: netLabel },
+          style: {
+            background: '#111820',
+            border: `1px solid ${color}`,
+            borderRadius: 5,
+            color,
+            fontSize: 11,
+            fontWeight: 700,
+            padding: '8px 10px',
+            width: 120,
+            textAlign: 'center',
+          },
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
+        });
+        netEdges.push({
+          id: `${netId}-from-mcu`,
+          source: mcu?.id ?? '',
+          target: netId,
+          type: 'smoothstep',
+          label: mapping.mcuPin,
+          labelStyle: { fill: color, fontWeight: 700, fontSize: 11 },
+          labelBgStyle: { fill: '#0a0c10', fillOpacity: 0.95 },
+          style: { stroke: color, strokeWidth: 2.5 },
+        });
+        mappings.forEach((branch, index) => {
+          netEdges.push({
+            id: `${netId}-to-${branch.componentId}-${index}`,
+            source: netId,
+            target: branch.componentId,
+            type: 'smoothstep',
+            label: branch.componentPin,
+            labelStyle: { fill: color, fontWeight: 700, fontSize: 11 },
+            labelBgStyle: { fill: '#0a0c10', fillOpacity: 0.95 },
+            animated: mapping.protocol === 'I2C' || mapping.protocol === 'SPI',
+            style: { stroke: color, strokeWidth: 2.5 },
+          });
+        });
+        return;
+      }
+
+      mappings.forEach((branch, index) => {
+        netEdges.push({
+          id: `e-${key}-${branch.componentId}-${index}`,
+          source: mcu?.id ?? '',
+          target: branch.componentId,
+          type: 'smoothstep',
+          label: `${branch.mcuPin} → ${branch.componentPin}`,
+          labelStyle: { fill: color, fontWeight: 700, fontSize: 11 },
+          labelBgStyle: { fill: '#0a0c10', fillOpacity: 0.95 },
+          animated: ['I2C', 'SPI', 'UART'].includes(branch.protocol),
+          style: { stroke: color, strokeWidth: 2 },
+        });
+      });
+    });
+
+    return { nodes: [...componentNodes, ...netNodes], edges: netEdges };
   }, [design]);
 
   return (

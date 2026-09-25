@@ -29,7 +29,7 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
     if (hasPullups) {
       rules.push({ type: 'Pass', message: 'I2C pull-up verified | The communication bus includes the required supporting components. | No action required.' });
     } else {
-      rules.push({ type: 'Pass', message: 'I2C bus verified | The ESP32, BME280, and OLED are connected on the shared I2C lines. | No extra pull-up resistor is shown for this demo configuration.' });
+      rules.push({ type: 'Pass', message: 'I2C pin mapping generated | SDA and SCL are mapped to the selected modules. | Verify that the modules provide I2C pull-up resistors.' });
     }
   }
 
@@ -67,7 +67,7 @@ export function generateCircuit(prompt: string, preset?: string): CircuitDesign 
 
   const components = [...baseTemplate.components];
   if (lowerPrompt.includes('motor')) {
-    components.push({ id: 'm1', name: 'L298N', description: 'Dual Motor Driver', category: 'Actuator', package: 'Module', estimatedCost: 3.50, pins: ['ENA', 'IN1', 'IN2', 'OUT1', 'OUT2'], operatingVoltage: 12.0, maxCurrent_mA: 2000 });
+    components.push({ id: 'm1', name: 'L298N', description: 'Dual Motor Driver', category: 'Actuator', package: 'Module', estimatedCost: 350.00, pins: ['ENA', 'IN1', 'IN2', 'OUT1', 'OUT2'], operatingVoltage: 12.0, maxCurrent_mA: 2000 });
   }
 
   const generatedDesign: CircuitDesign = {

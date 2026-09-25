@@ -17,7 +17,7 @@ const Header: React.FC<HeaderProps> = ({ currentDesign }) => {
     const designBlob = new Blob([JSON.stringify(currentDesign, null, 2)], { type: 'application/json' });
     saveAs(designBlob, `${currentDesign.id}-design.json`);
 
-    const bomHeader = 'Ref,Name,Category,Package,EstimatedCost\n';
+    const bomHeader = 'Ref,Name,Category,Package,EstimatedCostINR\n';
     const bomRows = currentDesign.components.map(c =>
       `${c.id},${c.name},${c.category},${c.package},${c.estimatedCost}`
     ).join('\n');
