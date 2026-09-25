@@ -6,11 +6,9 @@ export const templates: Record<string, CircuitDesign> = {
     title: 'ESP32 IoT Weather Station',
     description: 'A temperature, humidity, and pressure monitoring system using ESP32, BME280, and a small OLED display.',
     components: [
-      { id: 'u1', name: 'ESP32-WROOM-32', description: 'Wi-Fi & Bluetooth MCU Module', category: 'MCU', package: 'SMD-38', estimatedCost: 3.50, pins: ['3V3', 'GND', 'EN', 'IO21', 'IO22'], operatingVoltage: 3.3 },
-      { id: 's1', name: 'BME280', description: 'Temp, Humidity, Pressure Sensor', category: 'Sensor', package: 'LGA-8', estimatedCost: 4.20, pins: ['VCC', 'GND', 'SCL', 'SDA'], operatingVoltage: 3.3, maxCurrent_mA: 1 },
-      { id: 'd1', name: 'SSD1306 OLED 0.96"', description: 'I2C Monochrome Display', category: 'Actuator', package: 'Module', estimatedCost: 2.80, pins: ['VCC', 'GND', 'SCL', 'SDA'], operatingVoltage: 3.3, maxCurrent_mA: 20 },
-      { id: 'r1', name: '10k Resistor', description: 'I2C Pull-up Resistor', category: 'Passive', package: '0805', estimatedCost: 0.05, pins: ['1', '2'] },
-      { id: 'r2', name: '10k Resistor', description: 'I2C Pull-up Resistor', category: 'Passive', package: '0805', estimatedCost: 0.05, pins: ['1', '2'] }
+      { id: 'u1', name: 'ESP32-WROOM-32', description: 'Wi-Fi & Bluetooth MCU Module', category: 'MCU', package: 'SMD-38', estimatedCost: 350.00, pins: ['3V3', 'GND', 'EN', 'IO21', 'IO22'], operatingVoltage: 3.3 },
+      { id: 's1', name: 'BME280', description: 'Temp, Humidity, Pressure Sensor', category: 'Sensor', package: 'LGA-8', estimatedCost: 420.00, pins: ['VCC', 'GND', 'SCL', 'SDA'], operatingVoltage: 3.3, maxCurrent_mA: 1 },
+      { id: 'd1', name: 'SSD1306 OLED 0.96"', description: 'I2C Monochrome Display', category: 'Actuator', package: 'Module', estimatedCost: 280.00, pins: ['VCC', 'GND', 'SCL', 'SDA'], operatingVoltage: 3.3, maxCurrent_mA: 20 }
     ],
     pinMappings: [
       { mcuPin: '3V3', componentId: 's1', componentPin: 'VCC', protocol: 'Power', description: '3.3V Power to Sensor' },

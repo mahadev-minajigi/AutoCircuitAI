@@ -20,7 +20,7 @@ const BomTable: React.FC<BomTableProps> = ({ design }) => {
           <ShoppingCart color="var(--accent-emerald)" />
           <div>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Estimated Total</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)' }}>${totalCost.toFixed(2)}</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)' }}>₹{totalCost.toFixed(2)}</div>
           </div>
         </div>
       </div>
@@ -44,7 +44,7 @@ const BomTable: React.FC<BomTableProps> = ({ design }) => {
                 </td>
                 <td style={{ padding: '16px' }}>1</td>
                 <td style={{ padding: '16px', color: 'var(--text-muted)' }}>{comp.description}</td>
-                <td style={{ padding: '16px', textAlign: 'right', fontWeight: 500 }}>${comp.estimatedCost.toFixed(2)}</td>
+                <td style={{ padding: '16px', textAlign: 'right', fontWeight: 500 }}>₹{comp.estimatedCost.toFixed(2)}</td>
               </tr>
             ))}
           </tbody>
