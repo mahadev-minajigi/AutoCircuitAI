@@ -452,3 +452,16 @@ body {
   background: #0a0c10;
   border: 1px solid var(--border-color);
 }
+
+.pcb-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 560px;
+}
+
+.pcb-layout-frame {
+  position: relative;
+  flex: 1;
+  min-height: 480px;
+}
