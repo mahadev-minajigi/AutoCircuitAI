@@ -70,12 +70,14 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
       const mapping = mappings[0];
       const color = netColors[mapping.protocol] ?? '#9aa4b2';
       const shared = mappings.length > 1;
-      const showJunction = shared || ['Power', 'GND'].includes(mapping.protocol);
+      const showJunction = shared || ['Power', 'GND', 'SPI'].includes(mapping.protocol);
       const netId = `net-${key.replace(/[^a-zA-Z0-9-]/g, '-')}`;
       const netLabel = mapping.protocol === 'Power'
         ? `${mapping.mcuPin} POWER`
         : mapping.protocol === 'GND'
           ? 'GND'
+            : mapping.protocol === 'SPI'
+              ? `SPI ${mapping.componentPin}`
           : ['SDA', 'SCL'].includes(mapping.componentPin)
             ? `${mapping.protocol} ${mapping.componentPin}`
             : `${mapping.protocol} ${mapping.mcuPin}`;
@@ -189,6 +191,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         <span><i style={{ background: '#ef5350' }} />3.3V power</span>
         <span><i style={{ background: '#9aa4b2' }} />Ground</span>
         <span><i style={{ background: '#ffb74d' }} />I²C data and clock</span>
+        <span><i style={{ background: '#4fc3f7' }} />SPI signals</span>
         <span className="schematic-legend-note">Use the controls to zoom; drag the canvas to inspect connections.</span>
       </div>
 

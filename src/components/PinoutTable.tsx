@@ -17,7 +17,7 @@ const PinoutTable: React.FC<PinoutTableProps> = ({ design }) => {
             <tr style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--border-color)' }}>
               <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-muted)' }}>Component</th>
               <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-muted)' }}>Pin</th>
-              <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-muted)' }}>ESP32 Connection</th>
+              <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-muted)' }}>MCU Pin</th>
               <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-muted)' }}>Purpose</th>
             </tr>
           </thead>

@@ -78,7 +78,6 @@ void loop() {
     components: [
       { id: 'u1', name: 'STM32F405RGT6', description: 'ARM Cortex-M4 MCU 168MHz', category: 'MCU', package: 'LQFP-64', estimatedCost: 650.00, pins: ['3V3', 'GND', 'PA5', 'PA6', 'PA7', 'PA4'], operatingVoltage: 3.3 },
       { id: 's1', name: 'MPU6000', description: '6-Axis Gyro/Accel (SPI)', category: 'Sensor', package: 'QFN-24', estimatedCost: 520.00, pins: ['VCC', 'GND', 'SCLK', 'MISO', 'MOSI', 'CS'], operatingVoltage: 3.3, maxCurrent_mA: 4 },
-      { id: 'p1', name: 'LDO 3.3V', description: 'Voltage Regulator 500mA', category: 'Power', package: 'SOT-223', estimatedCost: 45.00, pins: ['VIN', 'GND', 'VOUT'] },
     ],
     pinMappings: [
       { mcuPin: '3V3', componentId: 's1', componentPin: 'VCC', protocol: 'Power', description: '3.3V Power to IMU' },
