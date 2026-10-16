@@ -156,81 +156,116 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.fillStyle = '#94a3b8';
       ctx.fillRect(mcuX - 8, mcuY + mcuHeight / 2 - 8, 8, 16);
 
-      // 2. Peripheral Modules
-      const peripherals = design.components.filter(c => c.id !== mcu?.id);
-      const compPositions: { id: string; name: string; x: number; y: number; w: number; h: number }[] = [];
+      // 2. Filter Primary Hardware Modules (Sensor, Actuator, Display, etc.)
+      // Raw SMD passives (0805 caps, pull-ups) shouldn't clutter the main module placement
+      const primaryModules = design.components.filter(c => 
+        c.id !== mcu?.id && 
+        c.category !== 'Passive' &&
+        !c.name.toLowerCase().includes('capacitor') &&
+        !c.name.toLowerCase().includes('resistor') &&
+        !c.name.toLowerCase().includes('ams1117') // Dev board handles onboard 3.3V LDO
+      );
 
-      peripherals.forEach((comp, idx) => {
-        const px = startX + 320 + idx * 170;
-        const py = trenchY - 35;
-        const pw = 120;
-        const ph = 70;
-        compPositions.push({ id: comp.id, name: comp.name, x: px, y: py, w: pw, h: ph });
+      const compPositions: { id: string; name: string; x: number; y: number; w: number; h: number; isOled: boolean; isSensor: boolean }[] = [];
 
-        ctx.fillStyle = '#1e293b';
-        ctx.strokeStyle = '#e2e8f0';
+      // Compute slot spacing based on number of primary modules
+      const availableWidth = boardWidth - (mcuWidth + 120);
+      const modSpacing = Math.min(180, availableWidth / Math.max(primaryModules.length, 1));
+
+      primaryModules.forEach((comp, idx) => {
+        const isOled = comp.name.toLowerCase().includes('oled') || comp.name.toLowerCase().includes('ssd1306');
+        const isSensor = comp.category === 'Sensor' || comp.name.toLowerCase().includes('bme280') || comp.name.toLowerCase().includes('mpu');
+        
+        const pw = isOled ? 130 : 100;
+        const ph = isOled ? 95 : 75;
+        const px = startX + 260 + idx * (modSpacing + 20);
+        const py = trenchY - (isOled ? 50 : 38);
+
+        compPositions.push({ id: comp.id, name: comp.name, x: px, y: py, w: pw, h: ph, isOled, isSensor });
+
+        // Module PCB background
+        ctx.fillStyle = isOled ? '#020617' : '#064e3b';
+        ctx.strokeStyle = isOled ? '#38bdf8' : '#10b981';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.roundRect(px, py, pw, ph, 6);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 10px Inter, sans-serif';
-        ctx.fillText(comp.name, px + pw / 2, py + 28, pw - 10);
+        // OLED Visual Screen Mockup
+        if (isOled) {
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(px + 10, py + 10, pw - 20, 42);
+          ctx.strokeStyle = '#0284c7';
+          ctx.strokeRect(px + 10, py + 10, pw - 20, 42);
 
-        ctx.fillStyle = '#38bdf8';
-        ctx.font = '9px Inter, sans-serif';
-        ctx.fillText(comp.category, px + pw / 2, py + 44);
+          // Simulated OLED display pixels
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = 'bold 8px JetBrains Mono, monospace';
+          ctx.fillText('AUTO-CIRCUIT', px + pw / 2, py + 24);
+          ctx.font = '7px JetBrains Mono, monospace';
+          ctx.fillStyle = '#00ff88';
+          ctx.fillText('T:24.8C H:52%', px + pw / 2, py + 36);
+          ctx.fillText('1013 hPa', px + pw / 2, py + 46);
+        }
+
+        // Module Label
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 9px Inter, sans-serif';
+        ctx.fillText(comp.name, px + pw / 2, py + (isOled ? ph - 16 : 24), pw - 8);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '8px Inter, sans-serif';
+        ctx.fillText(isOled ? 'I2C OLED (0x3C)' : isSensor ? 'Sensor (0x76)' : comp.category, px + pw / 2, py + (isOled ? ph - 6 : 38));
 
         // Header pins at bottom of module
         ctx.fillStyle = '#cbd5e1';
-        for (let p = 0; p < Math.min(comp.pins.length, 5); p++) {
-          ctx.fillRect(px + 15 + p * 20, py + ph - 4, 8, 8);
+        const pinCount = Math.min(comp.pins.length, 5);
+        for (let p = 0; p < pinCount; p++) {
+          ctx.fillRect(px + (pw - pinCount * 18) / 2 + p * 18, py + ph - 2, 8, 8);
         }
       });
 
-      // 3. Physical 220Ω Resistor placed in series
-      const resX = startX + 250;
-      const resY = startY + 110;
-      // Resistor body
-      ctx.fillStyle = '#fef08a';
-      ctx.strokeStyle = '#ca8a04';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(resX, resY - 6, 40, 12, 3);
-      ctx.fill();
-      ctx.stroke();
+      // 3. LED Circuit & Series Resistor (Only rendered if an actual LED is part of the circuit)
+      const ledComponent = design.components.find(c => c.name.toLowerCase().includes('led'));
+      if (ledComponent) {
+        const resX = startX + 220;
+        const resY = startY + 110;
+        // Resistor body
+        ctx.fillStyle = '#fef08a';
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(resX, resY - 6, 36, 12, 3);
+        ctx.fill();
+        ctx.stroke();
 
-      // Color bands (220Ω: Red, Red, Brown, Gold)
-      ctx.fillStyle = '#ef4444'; // Red
-      ctx.fillRect(resX + 8, resY - 6, 4, 12);
-      ctx.fillRect(resX + 15, resY - 6, 4, 12);
-      ctx.fillStyle = '#78350f'; // Brown
-      ctx.fillRect(resX + 22, resY - 6, 4, 12);
-      ctx.fillStyle = '#eab308'; // Gold
-      ctx.fillRect(resX + 30, resY - 6, 3, 12);
+        // Color bands (220Ω: Red, Red, Brown, Gold)
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(resX + 6, resY - 6, 3, 12);
+        ctx.fillRect(resX + 13, resY - 6, 3, 12);
+        ctx.fillStyle = '#78350f'; ctx.fillRect(resX + 20, resY - 6, 3, 12);
+        ctx.fillStyle = '#eab308'; ctx.fillRect(resX + 27, resY - 6, 3, 12);
 
-      // Resistor lead wires
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(resX, resY);
-      ctx.lineTo(resX - 25, resY);
-      ctx.moveTo(resX + 40, resY);
-      ctx.lineTo(resX + 65, resY);
-      ctx.stroke();
+        // Resistor lead wires
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(resX, resY);
+        ctx.lineTo(resX - 20, resY);
+        ctx.moveTo(resX + 36, resY);
+        ctx.lineTo(resX + 55, resY);
+        ctx.stroke();
 
-      ctx.fillStyle = '#64748b';
-      ctx.font = '9px JetBrains Mono, monospace';
-      ctx.fillText('220Ω', resX + 20, resY + 18);
+        ctx.fillStyle = '#64748b';
+        ctx.font = '8px JetBrains Mono, monospace';
+        ctx.fillText('220Ω (LED limit)', resX + 18, resY + 18);
+      }
 
       // ── Physical Curved Jumper Wires (DuPont Cables) ─────────────
-      // Fix 3: Power Distribution via Red (+) & Blue (-) Rails
       const redRailY = startY + 28;
       const blueRailY = startY + 54;
 
-      // 1. AMS1117 / MCU 3.3V power jumper to Red Rail
+      // 1. ESP32 Onboard 3.3V Pin to Red Rail (+)
       ctx.strokeStyle = '#ef4444';
       ctx.lineWidth = 3.5;
       ctx.beginPath();
@@ -238,9 +273,10 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.quadraticCurveTo(mcuX + 30, startY + 15, mcuX + 60, redRailY);
       ctx.stroke();
       ctx.fillStyle = '#ef4444';
-      ctx.fillText('AMS1117 3.3V ──▶ Red Rail (+)', mcuX + 65, redRailY - 5);
+      ctx.font = 'bold 9px JetBrains Mono, monospace';
+      ctx.fillText('ESP32 3V3 Pin ──▶ Red Rail (+)', mcuX + 65, redRailY - 5);
 
-      // 2. GND to Blue Rail
+      // 2. ESP32 GND Pin to Blue Rail (-)
       ctx.strokeStyle = '#3b82f6';
       ctx.lineWidth = 3.5;
       ctx.beginPath();
@@ -248,68 +284,65 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.quadraticCurveTo(mcuX + 30, startY + 45, mcuX + 80, blueRailY);
       ctx.stroke();
       ctx.fillStyle = '#3b82f6';
-      ctx.fillText('GND ──▶ Blue Rail (-)', mcuX + 85, blueRailY + 14);
+      ctx.fillText('ESP32 GND Pin ──▶ Blue Rail (-)', mcuX + 85, blueRailY + 14);
 
-      // 3. Components powered from the Rails
+      // 3. Power Distribution: Both BME280 & SSD1306 powered from Rails
       compPositions.forEach((target) => {
         // Red rail to Component VCC
         ctx.strokeStyle = '#ef4444';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        const tapX = target.x + 30;
+        const tapX = target.x + 25;
         ctx.moveTo(tapX, redRailY);
-        ctx.quadraticCurveTo(tapX - 10, target.y - 15, target.x + 25, target.y);
+        ctx.quadraticCurveTo(tapX - 10, target.y - 15, target.x + 20, target.y);
         ctx.stroke();
 
         // Blue rail to Component GND
         ctx.strokeStyle = '#3b82f6';
         ctx.beginPath();
         ctx.moveTo(tapX + 20, blueRailY);
-        ctx.quadraticCurveTo(tapX + 10, target.y - 10, target.x + 45, target.y);
+        ctx.quadraticCurveTo(tapX + 10, target.y - 10, target.x + 40, target.y);
         ctx.stroke();
       });
 
-      // 4. Dedicated I2C Signal Lines: SDA -> GPIO21, SCL -> GPIO22
+      // 4. Parallel I2C Bus Jumpers (GPIO21 -> SDA, GPIO22 -> SCL)
       const sdaMcuX = mcuX + mcuWidth - 10;
       const sdaMcuY = mcuY + 30;
       const sclMcuX = mcuX + mcuWidth - 10;
-      const sclMcuY = mcuY + 45;
+      const sclMcuY = mcuY + 50;
 
-      peripherals.forEach((comp, idx) => {
-        const target = compPositions.find(c => c.id === comp.id);
-        if (!target) return;
-
-        // SDA Jumper (Blue)
-        ctx.strokeStyle = '#3b82f6';
+      compPositions.forEach((target, idx) => {
+        // SDA Jumper (Blue / Cyan) in parallel
+        ctx.strokeStyle = '#0284c7';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(sdaMcuX, sdaMcuY);
-        const sdaDestX = target.x + 65;
+        const sdaDestX = target.x + (target.isOled ? 60 : 45);
         const sdaDestY = target.y + target.h;
-        ctx.bezierCurveTo((sdaMcuX + sdaDestX) / 2, sdaMcuY + 60 + idx * 10, (sdaMcuX + sdaDestX) / 2, sdaDestY + 40, sdaDestX, sdaDestY);
+        ctx.bezierCurveTo((sdaMcuX + sdaDestX) / 2, sdaMcuY + 60 + idx * 18, (sdaMcuX + sdaDestX) / 2, sdaDestY + 40 + idx * 10, sdaDestX, sdaDestY);
         ctx.stroke();
 
-        // SCL Jumper (Yellow)
+        // SCL Jumper (Yellow) in parallel
         ctx.strokeStyle = '#eab308';
         ctx.beginPath();
         ctx.moveTo(sclMcuX, sclMcuY);
-        const sclDestX = target.x + 85;
+        const sclDestX = target.x + (target.isOled ? 85 : 70);
         const sclDestY = target.y + target.h;
-        ctx.bezierCurveTo((sclMcuX + sclDestX) / 2, sclMcuY + 75 + idx * 10, (sclMcuX + sclDestX) / 2, sclDestY + 55, sclDestX, sclDestY);
+        ctx.bezierCurveTo((sclMcuX + sclDestX) / 2, sclMcuY + 75 + idx * 18, (sclMcuX + sclDestX) / 2, sclDestY + 55 + idx * 10, sclDestX, sclDestY);
         ctx.stroke();
       });
 
-      ctx.fillStyle = '#38bdf8';
+      ctx.fillStyle = '#0284c7';
       ctx.font = 'bold 10px JetBrains Mono, monospace';
-      ctx.fillText('SDA ──▶ GPIO21 (Blue)', sdaMcuX - 60, sdaMcuY - 6);
+      ctx.fillText('SDA ──▶ GPIO21 (Shared I2C Data)', sdaMcuX - 70, sdaMcuY - 6);
       ctx.fillStyle = '#eab308';
-      ctx.fillText('SCL ──▶ GPIO22 (Yellow)', sclMcuX - 60, sclMcuY + 16);
+      ctx.fillText('SCL ──▶ GPIO22 (Shared I2C Clock)', sclMcuX - 70, sclMcuY + 16);
 
       // Bottom Legend
       ctx.fillStyle = '#94a3b8';
       ctx.font = '11px Inter, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText('Breadboard Standard: Power (+) Red Rail, Ground (-) Blue Rail, Tie-point columns A-E and F-J connected internally.', startX + 10, startY + boardHeight + 35);
+      ctx.fillText('Breadboard Wiring: ESP32 powers Red (+) / Blue (-) rails. BME280 & SSD1306 OLED tap rails and share I2C bus (GPIO21/22).', startX + 10, startY + boardHeight + 35);
     };
 
     const observer = new ResizeObserver(drawBreadboard);
