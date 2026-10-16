@@ -176,7 +176,7 @@ export function generateNetlist(design: CircuitDesign): object {
   };
 }
 
-export function generateCircuit(prompt: string, preset?: string): CircuitDesign {
+export function generateCircuitLocal(prompt: string, preset?: string): CircuitDesign {
   if (preset && templates[preset]) {
     const design = { ...templates[preset] };
     design.drcReport = runDRC(design);
@@ -209,4 +209,28 @@ export function generateCircuit(prompt: string, preset?: string): CircuitDesign 
   generatedDesign.drcReport = runDRC(generatedDesign);
 
   return generatedDesign;
+}
+
+export async function generateCircuit(prompt: string, preset?: string): Promise<CircuitDesign> {
+  try {
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt, preset }),
+    });
+
+    if (response.ok) {
+      const data: CircuitDesign = await response.json();
+      if (!data.drcReport || data.drcReport.length === 0) {
+        data.drcReport = runDRC(data);
+      }
+      return data;
+    }
+  } catch {
+    // If backend endpoint is unavailable (e.g. offline or static client), fallback seamlessly
+  }
+
+  return generateCircuitLocal(prompt, preset);
 }

@@ -73,10 +73,10 @@ function App() {
       });
     }, 150);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       clearInterval(stepInterval);
       setGeneratingStep(workflowSteps.length - 1);
-      const result = generateCircuit(prompt, preset);
+      const result = await generateCircuit(prompt, preset);
       setDesign(result);
       setHistory(prev => [...prev, { design: result, prompt, timestamp: Date.now() }]);
       setIsGenerating(false);
