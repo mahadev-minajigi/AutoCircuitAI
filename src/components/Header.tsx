@@ -1,31 +1,47 @@
 import React from 'react';
-import { Zap, Download } from 'lucide-react';
+import { Zap, Download, FileJson, FileText, FileCode2 } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import type { CircuitDesign } from '../types/circuit';
+import { generateNetlist } from '../services/aiCircuitEngine';
 
 interface HeaderProps {
   currentDesign: CircuitDesign | null;
+  onShowToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentDesign }) => {
+const Header: React.FC<HeaderProps> = ({ currentDesign, onShowToast }) => {
   const handleExport = () => {
     if (!currentDesign) {
-      alert('No design to export. Please generate a circuit first.');
+      onShowToast('No design to export. Generate a circuit first.', 'error');
       return;
     }
 
-    const designBlob = new Blob([JSON.stringify(currentDesign, null, 2)], { type: 'application/json' });
-    saveAs(designBlob, `${currentDesign.id}-design.json`);
+    try {
+      // Design JSON
+      const designBlob = new Blob([JSON.stringify(currentDesign, null, 2)], { type: 'application/json' });
+      saveAs(designBlob, `${currentDesign.id}-design.json`);
 
-    const bomHeader = 'Ref,Name,Category,Package,EstimatedCostINR\n';
-    const bomRows = currentDesign.components.map(c =>
-      `${c.id},${c.name},${c.category},${c.package},${c.estimatedCost}`
-    ).join('\n');
-    const bomBlob = new Blob([bomHeader + bomRows], { type: 'text/csv;charset=utf-8;' });
-    saveAs(bomBlob, `${currentDesign.id}-BOM.csv`);
+      // BOM CSV
+      const bomHeader = 'Ref,Name,Category,Package,EstimatedCostINR\n';
+      const bomRows = currentDesign.components.map(c =>
+        `${c.id},${c.name},${c.category},${c.package},${c.estimatedCost}`
+      ).join('\n');
+      const bomBlob = new Blob([bomHeader + bomRows], { type: 'text/csv;charset=utf-8;' });
+      saveAs(bomBlob, `${currentDesign.id}-BOM.csv`);
 
-    const fwBlob = new Blob([currentDesign.firmwareCode], { type: 'text/plain;charset=utf-8;' });
-    saveAs(fwBlob, `${currentDesign.id}-firmware.ino`);
+      // Firmware
+      const fwBlob = new Blob([currentDesign.firmwareCode], { type: 'text/plain;charset=utf-8;' });
+      saveAs(fwBlob, `${currentDesign.id}-firmware.ino`);
+
+      // Netlist JSON
+      const netlist = generateNetlist(currentDesign);
+      const netlistBlob = new Blob([JSON.stringify(netlist, null, 2)], { type: 'application/json' });
+      saveAs(netlistBlob, `${currentDesign.id}-netlist.json`);
+
+      onShowToast('Exported 4 files: Design JSON, BOM CSV, Firmware, Netlist', 'success');
+    } catch {
+      onShowToast('Export failed — check browser download permissions', 'error');
+    }
   };
 
   return (
@@ -42,9 +58,17 @@ const Header: React.FC<HeaderProps> = ({ currentDesign }) => {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '16px' }}>
-        <button className="btn-primary" onClick={handleExport} disabled={!currentDesign}>
-          <Download size={16} /> Export
+      <div className="header-actions">
+        {currentDesign && (
+          <div className="header-file-badges">
+            <span className="file-badge" title="Design JSON"><FileJson size={13} /> JSON</span>
+            <span className="file-badge" title="BOM CSV"><FileText size={13} /> BOM</span>
+            <span className="file-badge" title="Firmware .ino"><FileCode2 size={13} /> FW</span>
+            <span className="file-badge" title="Netlist JSON"><FileJson size={13} /> NET</span>
+          </div>
+        )}
+        <button className="btn-primary export-btn" onClick={handleExport} disabled={!currentDesign} title="Export all files (Ctrl+E)">
+          <Download size={16} /> Export All
         </button>
       </div>
     </header>
