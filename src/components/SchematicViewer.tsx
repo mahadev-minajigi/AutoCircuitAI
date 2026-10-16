@@ -1,5 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Maximize2, Minimize2, Zap, RotateCcw } from 'lucide-react';
+import { 
+  Maximize2, 
+  Minimize2, 
+  Zap, 
+  RotateCcw, 
+  Play, 
+  Square, 
+  Lightbulb, 
+  Activity,
+  Hand
+} from 'lucide-react';
 import type { CircuitDesign } from '../types/circuit';
 import ReactFlow, { 
   Background, 
@@ -16,21 +26,89 @@ interface SchematicViewerProps {
   design: CircuitDesign;
 }
 
-// Custom IC / Module Schematic Node Component
+// ── Realistic Interactive IC / Component Node ─────────────────────
 const SchematicIcNode = ({ data }: any) => {
   const isMCU = data.isMCU;
+  const isSimulating = data.isSimulating;
   const pins: string[] = data.pins || [];
+  const name: string = data.name || '';
+  const category: string = data.category || '';
+  const isLed = name.toLowerCase().includes('led') || category.toLowerCase() === 'actuator' && name.toLowerCase().includes('diode');
+  const isOled = name.toLowerCase().includes('oled') || name.toLowerCase().includes('display') || name.toLowerCase().includes('ssd1306');
+  const isSensor = category === 'Sensor' || name.toLowerCase().includes('bme280') || name.toLowerCase().includes('mpu') || name.toLowerCase().includes('dht');
+  const isResistor = name.toLowerCase().includes('resistor');
 
   return (
-    <div className={`schematic-ic-box ${isMCU ? 'schematic-mcu-box' : 'schematic-peripheral-box'}`}>
+    <div className={`schematic-ic-box ${isMCU ? 'schematic-mcu-box' : 'schematic-peripheral-box'} ${isSimulating ? 'sim-active-box' : ''}`}>
       {/* IC Header */}
       <div className="ic-header">
         <div className="ic-title-row">
           <span className="ic-notch" title="Pin 1 orientation notch" />
-          <span className="ic-name">{data.name}</span>
+          <span className="ic-name">{name}</span>
+          {isSimulating && (
+            <span className="live-status-badge">
+              <span className="live-pulse-dot" /> LIVE
+            </span>
+          )}
         </div>
-        <span className="ic-category">{data.category} · {data.package}</span>
+        <span className="ic-category">{category} · {data.package}</span>
       </div>
+
+      {/* LIVE SIMULATED REAL-WORLD HARDWARE OUTPUTS */}
+      {isSimulating && (
+        <div className="live-hardware-feedback">
+          {/* 1. Live LED Component Glow with Resistor protection */}
+          {(isLed || name.toLowerCase().includes('led')) && (
+            <div className="live-led-container">
+              <div className={`hardware-led-bulb ${data.ledState ? 'bulb-illuminated' : 'bulb-off'}`}>
+                <Lightbulb size={24} className={data.ledState ? 'led-icon-on' : 'led-icon-off'} />
+              </div>
+              <div className="hardware-led-info">
+                <span className="hardware-label">
+                  LED Status: <strong style={{ color: data.ledState ? '#00ff88' : '#64748b' }}>{data.ledState ? 'ON (Glowing 20mA)' : 'OFF'}</strong>
+                </span>
+                <span className="hardware-sublabel">Protected by 220Ω in series</span>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Live OLED Display Output */}
+          {isOled && (
+            <div className="live-oled-screen">
+              <div className="oled-header-bar">SSD1306 128x64 OLED</div>
+              <div className="oled-content-text">
+                <div>AutoCircuit AI</div>
+                <div className="oled-metric">T: {data.sensorTemp || '24.8'}°C | H: {data.sensorHum || '52'}%</div>
+                <div className="oled-bar-visual">
+                  <div className="oled-bar-fill" style={{ width: `${(data.sensorTemp || 25) * 2}%` }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3. Live Sensor Telemetry (BME280 / MPU6050) */}
+          {isSensor && !isOled && (
+            <div className="live-sensor-telemetry">
+              <div className="telemetry-item">
+                <span className="telemetry-label">Temp:</span>
+                <span className="telemetry-val">{data.sensorTemp || '24.8'}°C</span>
+              </div>
+              <div className="telemetry-item">
+                <span className="telemetry-label">Signal:</span>
+                <span className="telemetry-val" style={{ color: '#00ff88' }}>LOCK 400kHz</span>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Resistor Live Series Current Limiting */}
+          {isResistor && (
+            <div className="live-resistor-box">
+              <div className="resistor-symbol">──[ 220Ω ]──</div>
+              <div className="resistor-note">Current drop: ~15mA</div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* IC Pins Body */}
       <div className="ic-pins-container">
@@ -42,7 +120,7 @@ const SchematicIcNode = ({ data }: any) => {
 
           return (
             <div key={pinName} className="ic-pin-row">
-              <span className={`ic-pin-badge ${isPower ? 'pin-power' : isGnd ? 'pin-gnd' : isClock ? 'pin-clock' : isData ? 'pin-data' : ''}`}>
+              <span className={`ic-pin-badge ${isPower ? 'pin-power' : isGnd ? 'pin-gnd' : isClock ? 'pin-clock' : isData ? 'pin-data' : ''} ${isSimulating ? 'pin-active-glow' : ''}`}>
                 <span className="pin-num">{index + 1}</span>
                 <span className="pin-lbl">{pinName}</span>
               </span>
@@ -51,74 +129,138 @@ const SchematicIcNode = ({ data }: any) => {
         })}
       </div>
 
-      {/* Target & Source Handles for ReactFlow */}
+      {/* Handles */}
       <Handle type="target" position={Position.Left} id="left-in" className="schematic-handle" />
       <Handle type="source" position={Position.Right} id="right-out" className="schematic-handle" />
     </div>
   );
 };
 
+// ── Interactive Breadboard Wiring Hand Node ─────────────────────
+const WiringHandNode = ({ data }: any) => {
+  return (
+    <div className="wiring-hand-card">
+      <div className="hand-icon-wrap">
+        <Hand size={22} className="hand-animated-gesture" />
+      </div>
+      <div className="hand-card-body">
+        <div className="hand-card-title">Interactive Hand Insertion</div>
+        <div className="hand-card-desc">
+          Connecting <strong>{data.targetComponent || 'Component'}</strong> via breadboard jumper wires.
+        </div>
+        <div className="hand-card-pin">
+          Pin: <code>{data.targetPin}</code> ──▶ <code>{data.mcuPin}</code>
+        </div>
+      </div>
+      <Handle type="source" position={Position.Right} id="hand-out" className="schematic-handle" />
+    </div>
+  );
+};
+
 const nodeTypes = {
-  schematicIc: SchematicIcNode
+  schematicIc: SchematicIcNode,
+  wiringHand: WiringHandNode
 };
 
 const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<ReactFlowInstance | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Live Circuit Simulation States
+  const [isSimulating, setIsSimulating] = useState(true);
+  const [ledState, setLedState] = useState(true);
+  const [sensorTemp, setSensorTemp] = useState(25.4);
+  const [showHandWiring, setShowHandWiring] = useState(false);
+
+  // Live simulation tick: LED blinking, sensor data streaming
+  useEffect(() => {
+    if (!isSimulating) return;
+
+    const interval = setInterval(() => {
+      setLedState(prev => !prev);
+      setSensorTemp(prev => {
+        const delta = (Math.random() - 0.5) * 0.4;
+        return parseFloat((prev + delta).toFixed(1));
+      });
+    }, 1200);
+
+    return () => clearInterval(interval);
+  }, [isSimulating]);
 
   const { nodes, edges, netCount } = useMemo(() => {
     const mcu = design.components.find(c => c.category === 'MCU');
     const peripherals = design.components.filter(c => c.id !== mcu?.id);
 
     const wireColors: Record<string, string> = {
-      Power: '#ef4444', // Red for VCC
-      GND: '#64748b',   // Dark Slate for Ground
-      I2C: '#eab308',   // Yellow for I2C Clock / Blue for Data
-      SPI: '#3b82f6',   // Blue for SPI
-      UART: '#a855f7',  // Purple for Serial
-      I2S: '#06b6d4',   // Cyan for Digital Audio
-      PWM: '#f97316',   // Orange for PWM
-      ADC: '#10b981',   // Emerald for Analog
-      GPIO: '#00f0ff'   // Cyan default
+      Power: '#ef4444',
+      GND: '#64748b',
+      I2C: '#eab308',
+      SPI: '#3b82f6',
+      UART: '#a855f7',
+      I2S: '#06b6d4',
+      PWM: '#f97316',
+      ADC: '#10b981',
+      GPIO: '#00f0ff'
     };
 
-    // 1. Build Component Nodes with realistic Electronics IC appearance
     const componentNodes: Node[] = [];
 
-    // Place MCU on Left side with clear schematic spacing
+    // MCU Node
     if (mcu) {
       componentNodes.push({
         id: mcu.id,
         type: 'schematicIc',
-        position: { x: 50, y: Math.max(80, (peripherals.length * 220) / 2 - 100) },
+        position: { x: 80, y: Math.max(80, (peripherals.length * 240) / 2 - 120) },
         data: {
           name: mcu.name,
           category: mcu.category,
           package: mcu.package,
           pins: mcu.pins,
-          isMCU: true
+          isMCU: true,
+          isSimulating,
+          ledState,
+          sensorTemp
         }
       });
     }
 
-    // Place Peripheral ICs on Right side arranged neatly
+    // Peripheral Nodes
     peripherals.forEach((comp, idx) => {
       componentNodes.push({
         id: comp.id,
         type: 'schematicIc',
-        position: { x: 620, y: 50 + idx * 240 },
+        position: { x: 680, y: 50 + idx * 260 },
         data: {
           name: comp.name,
           category: comp.category,
           package: comp.package,
           pins: comp.pins,
-          isMCU: false
+          isMCU: false,
+          isSimulating,
+          ledState,
+          sensorTemp
         }
       });
     });
 
-    // 2. Build Realistic Schematic Net Edges with Color Coding & Pin Labels
+    // Optional Hands-on Breadboard Wiring Node
+    if (showHandWiring && peripherals.length > 0) {
+      const firstMapping = design.pinMappings[0];
+      const targetComp = design.components.find(c => c.id === firstMapping?.componentId);
+      componentNodes.push({
+        id: 'hand-wiring-node',
+        type: 'wiringHand',
+        position: { x: 380, y: 180 },
+        data: {
+          targetComponent: targetComp?.name || 'Sensor',
+          targetPin: firstMapping?.componentPin || 'VCC',
+          mcuPin: firstMapping?.mcuPin || '3V3'
+        }
+      });
+    }
+
+    // Schematic Edges
     const schematicEdges: Edge[] = [];
     const netCountSet = new Set<string>();
 
@@ -131,9 +273,9 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         : mapping.protocol === 'GND' 
           ? '#64748b' 
           : mapping.protocol === 'I2C' && mapping.componentPin.toLowerCase().includes('scl')
-            ? '#eab308' // Yellow for SCL
+            ? '#eab308'
             : mapping.protocol === 'I2C'
-              ? '#3b82f6' // Blue for SDA
+              ? '#3b82f6'
               : wireColors[mapping.protocol] || '#00f0ff';
 
       schematicEdges.push({
@@ -142,8 +284,9 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         target: mapping.componentId,
         sourceHandle: 'right-out',
         targetHandle: 'left-in',
-        type: 'smoothstep', // Realistic right-angle PCB/schematic routing
-        animated: mapping.protocol === 'I2C' || mapping.protocol === 'SPI' || mapping.protocol === 'I2S',
+        type: 'smoothstep',
+        // Animated current flow during live simulation!
+        animated: isSimulating,
         label: `${mapping.mcuPin} ──▶ ${mapping.componentPin} (${mapping.protocol})`,
         labelStyle: { 
           fill: color, 
@@ -160,7 +303,8 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         labelBgPadding: [6, 4],
         style: { 
           stroke: color, 
-          strokeWidth: mapping.protocol === 'Power' || mapping.protocol === 'GND' ? 2.5 : 2,
+          strokeWidth: isSimulating ? 2.8 : 2,
+          strokeDasharray: isSimulating ? '6,3' : undefined
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -172,7 +316,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
     });
 
     return { nodes: componentNodes, edges: schematicEdges, netCount: netCountSet.size };
-  }, [design]);
+  }, [design, isSimulating, ledState, sensorTemp, showHandWiring]);
 
   useEffect(() => {
     const updateFullscreenState = () => {
@@ -199,12 +343,15 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
   };
 
   return (
-    <section className="schematic-viewer" aria-label={`${design.title} practical circuit schematic`}>
+    <section className="schematic-viewer" aria-label={`${design.title} interactive circuit simulation`}>
       {/* Top Header */}
       <div className="schematic-heading">
         <div>
-          <h2>Practical Electrical Circuit Diagram</h2>
-          <p>{design.title} — Real-world IC pinout and connection schematic for laboratory implementation.</p>
+          <h2>
+            Interactive Live Circuit Diagram & Physical Simulator
+            {isSimulating && <span className="live-simulation-tag"><Activity size={14} /> LIVE RUNNING</span>}
+          </h2>
+          <p>{design.title} — Real-time interactive electrical schematic with animated current flow, LED output, and breadboard connections.</p>
         </div>
         <div className="schematic-counts">
           <span className="badge badge-cyan">{design.components.length} IC Packages</span>
@@ -212,7 +359,40 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         </div>
       </div>
 
-      {/* Wire Color Code Standards for Lab Students */}
+      {/* Live Simulation Controls Bar */}
+      <div className="sim-control-bar">
+        <div className="sim-controls-group">
+          <button 
+            className={`btn-sim-power ${isSimulating ? 'sim-on' : 'sim-off'}`}
+            onClick={() => setIsSimulating(prev => !prev)}
+            title="Toggle Live Circuit Power"
+          >
+            {isSimulating ? <Square size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+            {isSimulating ? 'Power ON (Simulating)' : 'Power OFF (Paused)'}
+          </button>
+
+          <button 
+            className={`btn-sim-toggle ${showHandWiring ? 'active-toggle' : ''}`}
+            onClick={() => setShowHandWiring(prev => !prev)}
+            title="Show hands-on component wiring guidance"
+          >
+            <Hand size={16} />
+            {showHandWiring ? 'Hands-On Guide: Active' : 'Hands-On Guide: Off'}
+          </button>
+        </div>
+
+        <div className="sim-live-metrics">
+          <div className="sim-metric-pill">
+            <span className="metric-dot-live" style={{ background: isSimulating ? (ledState ? '#00ff88' : '#eab308') : '#64748b' }} />
+            <span>LED Signal: <strong>{isSimulating ? (ledState ? 'HIGH (3.3V)' : 'LOW (0V)') : 'OFF'}</strong></span>
+          </div>
+          <div className="sim-metric-pill">
+            <span>Bus Clock: <strong>{isSimulating ? '400 kHz' : 'STOPPED'}</strong></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Wire Color Standards Bar */}
       <div className="schematic-standards-bar">
         <div className="standards-title">
           <Zap size={15} /> Standard Lab Wire Color Codes:
