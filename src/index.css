@@ -942,3 +942,823 @@ body {
   .design-stats { padding: 12px 16px 0; }
   .header-file-badges { display: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   PRACTICAL COLLEGE LAB GUIDE MANUAL STYLES
+   ══════════════════════════════════════════════════════════════ */
+.lab-guide-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+.lab-guide-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.lab-guide-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 20px;
+  color: var(--accent-cyan);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.lab-guide-header h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+
+.lab-guide-subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  max-width: 650px;
+  line-height: 1.5;
+}
+
+.lab-quick-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.lab-stat-box {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 110px;
+}
+
+.lab-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.lab-stat-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-top: 2px;
+}
+
+/* Safety banner */
+.lab-safety-banner {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.lab-safety-icon {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  padding: 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.lab-safety-banner h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ef4444;
+  margin-bottom: 4px;
+}
+
+.lab-safety-banner p {
+  font-size: 0.85rem;
+  color: #fca5a5;
+  line-height: 1.5;
+}
+
+/* Lab Section Card */
+.lab-section-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.lab-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.lab-section-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.lab-section-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+}
+
+.lab-icon-cyan { color: var(--accent-cyan); }
+.lab-icon-emerald { color: #10b981; }
+.lab-icon-amber { color: #f59e0b; }
+.lab-icon-rose { color: #ef4444; }
+
+/* Checklist */
+.lab-checklist {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.lab-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.lab-bullet-check {
+  color: #10b981;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+/* Component Pin Breakdown Grid */
+.lab-components-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 16px;
+}
+
+.lab-comp-card {
+  background: #11141a;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.lab-comp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.lab-comp-header h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.lab-comp-tag {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(0, 240, 255, 0.1);
+  color: var(--accent-cyan);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.lab-comp-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  line-height: 1.4;
+}
+
+.lab-pins-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+.lab-pins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lab-pin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.lab-pin-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.lab-pin-role {
+  color: #cbd5e1;
+  text-align: right;
+  max-width: 60%;
+}
+
+/* Breadboard Step Flow */
+.lab-steps-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lab-step-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: #11141a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lab-step-card:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+  background: #141922;
+}
+
+.lab-step-card.completed {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.03);
+}
+
+.lab-step-num-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  flex-shrink: 0;
+}
+
+.step-checked {
+  color: #10b981;
+}
+
+.lab-step-body {
+  flex: 1;
+}
+
+.lab-step-title-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.lab-step-title-line h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.lab-step-status-tag {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.lab-step-instruction {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.lab-step-caution {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #f59e0b;
+  padding: 6px 10px;
+  margin-top: 10px;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.8rem;
+  color: #fcd34d;
+}
+
+/* Lab Procedure List */
+.lab-procedure-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lab-proc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.lab-proc-number {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+/* Troubleshooting Grid */
+.lab-troubleshooting-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.lab-troubleshoot-card {
+  background: #11141a;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.lab-issue-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f87171;
+  margin-bottom: 6px;
+}
+
+.lab-solution-body {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   REALISTIC ELECTRONICS IC SCHEMATIC STYLES
+   ══════════════════════════════════════════════════════════════ */
+.schematic-standards-bar {
+  background: #11141a;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.standards-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.standards-items {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.standard-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.standard-item i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* IC Schematic Component Box */
+.schematic-ic-box {
+  background: #0d1117;
+  border: 2px solid #30363d;
+  border-radius: 6px;
+  padding: 12px 14px;
+  width: 240px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  font-family: var(--font-mono);
+  position: relative;
+}
+
+.schematic-mcu-box {
+  border-color: #00f0ff;
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.2);
+}
+
+.schematic-peripheral-box {
+  border-color: #3b82f6;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+}
+
+.ic-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.ic-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ic-notch {
+  width: 12px;
+  height: 6px;
+  border: 1.5px solid #00f0ff;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  display: inline-block;
+}
+
+.ic-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.ic-category {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin-top: 2px;
+  display: block;
+}
+
+.ic-pins-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ic-pin-row {
+  display: flex;
+  align-items: center;
+}
+
+.ic-pin-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.75rem;
+  width: 100%;
+}
+
+.pin-num {
+  font-size: 0.65rem;
+  color: #64748b;
+  width: 16px;
+}
+
+.pin-lbl {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.ic-pin-badge.pin-power {
+  background: rgba(239, 68, 68, 0.15);
+  border-left: 2px solid #ef4444;
+}
+.ic-pin-badge.pin-power .pin-lbl { color: #fca5a5; }
+
+.ic-pin-badge.pin-gnd {
+  background: rgba(100, 116, 139, 0.15);
+  border-left: 2px solid #64748b;
+}
+.ic-pin-badge.pin-gnd .pin-lbl { color: #cbd5e1; }
+
+.ic-pin-badge.pin-clock {
+  background: rgba(234, 179, 8, 0.15);
+  border-left: 2px solid #eab308;
+}
+.ic-pin-badge.pin-clock .pin-lbl { color: #fde047; }
+
+.ic-pin-badge.pin-data {
+  background: rgba(59, 130, 246, 0.15);
+  border-left: 2px solid #3b82f6;
+}
+.ic-pin-badge.pin-data .pin-lbl { color: #93c5fd; }
+
+.schematic-handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: #00f0ff !important;
+  border: 2px solid #0d1117 !important;
+}
+
+.schematic-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+}
+
+.toolbar-btn {
+  background: rgba(22, 26, 34, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolbar-btn:hover {
+  background: var(--bg-panel);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ENHANCED PINOUT TABLE STYLES
+   ══════════════════════════════════════════════════════════════ */
+.pinout-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.pinout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.pinout-subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.pinout-tip-box {
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.tip-icon {
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.tip-text {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.wire-color-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 0.8rem;
+}
+
+.pinout-filter-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pinout-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-radius: 6px;
+  min-width: 280px;
+}
+
+.pinout-search input {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  width: 100%;
+  outline: none;
+}
+
+.protocol-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pill-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pill-btn:hover, .pill-btn.active {
+  background: rgba(0, 240, 255, 0.1);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
+.pinout-table-wrapper {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+.pinout-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.pinout-table th {
+  padding: 14px 16px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.pinout-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.pinout-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pinout-row td {
+  padding: 12px 16px;
+}
+
+.pin-index {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.protocol-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mcu-pin-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.pin-direction {
+  color: #64748b;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.comp-name {
+  display: flex;
+  flex-direction: column;
+}
+
+.comp-cat {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.comp-pin-badge {
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #f1f5f9;
+}
+
+.wire-color-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wire-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.wire-name {
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.pin-desc {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  max-width: 280px;
+}
+
+.no-pins-found {
+  padding: 40px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, Zap, RotateCcw } from 'lucide-react';
 import type { CircuitDesign } from '../types/circuit';
 import ReactFlow, { 
   Background, 
   Controls, 
-  MiniMap,
-  Position
+  MiniMap, 
+  Position, 
+  MarkerType,
+  Handle
 } from 'reactflow';
 import type { Edge, Node, ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -14,137 +16,162 @@ interface SchematicViewerProps {
   design: CircuitDesign;
 }
 
+// Custom IC / Module Schematic Node Component
+const SchematicIcNode = ({ data }: any) => {
+  const isMCU = data.isMCU;
+  const pins: string[] = data.pins || [];
+
+  return (
+    <div className={`schematic-ic-box ${isMCU ? 'schematic-mcu-box' : 'schematic-peripheral-box'}`}>
+      {/* IC Header */}
+      <div className="ic-header">
+        <div className="ic-title-row">
+          <span className="ic-notch" title="Pin 1 orientation notch" />
+          <span className="ic-name">{data.name}</span>
+        </div>
+        <span className="ic-category">{data.category} · {data.package}</span>
+      </div>
+
+      {/* IC Pins Body */}
+      <div className="ic-pins-container">
+        {pins.map((pinName: string, index: number) => {
+          const isPower = pinName === '3V3' || pinName === 'VCC' || pinName === 'VIN' || pinName === '5V';
+          const isGnd = pinName === 'GND';
+          const isClock = pinName.includes('SCL') || pinName.includes('SCK') || pinName.includes('BCK');
+          const isData = pinName.includes('SDA') || pinName.includes('MOSI') || pinName.includes('MISO') || pinName.includes('DIN');
+
+          return (
+            <div key={pinName} className="ic-pin-row">
+              <span className={`ic-pin-badge ${isPower ? 'pin-power' : isGnd ? 'pin-gnd' : isClock ? 'pin-clock' : isData ? 'pin-data' : ''}`}>
+                <span className="pin-num">{index + 1}</span>
+                <span className="pin-lbl">{pinName}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Target & Source Handles for ReactFlow */}
+      <Handle type="target" position={Position.Left} id="left-in" className="schematic-handle" />
+      <Handle type="source" position={Position.Right} id="right-out" className="schematic-handle" />
+    </div>
+  );
+};
+
+const nodeTypes = {
+  schematicIc: SchematicIcNode
+};
+
 const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<ReactFlowInstance | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
   const { nodes, edges, netCount } = useMemo(() => {
-    const mcu = design.components.find(component => component.category === 'MCU');
-    const peripherals = design.components.filter(component => component.id !== mcu?.id);
-    const netColors: Record<string, string> = {
-      Power: '#ef5350',
-      GND: '#9aa4b2',
-      I2C: '#ffb74d',
-      SPI: '#4fc3f7',
-      UART: '#ba9cff',
+    const mcu = design.components.find(c => c.category === 'MCU');
+    const peripherals = design.components.filter(c => c.id !== mcu?.id);
+
+    const wireColors: Record<string, string> = {
+      Power: '#ef4444', // Red for VCC
+      GND: '#64748b',   // Dark Slate for Ground
+      I2C: '#eab308',   // Yellow for I2C Clock / Blue for Data
+      SPI: '#3b82f6',   // Blue for SPI
+      UART: '#a855f7',  // Purple for Serial
+      I2S: '#06b6d4',   // Cyan for Digital Audio
+      PWM: '#f97316',   // Orange for PWM
+      ADC: '#10b981',   // Emerald for Analog
+      GPIO: '#00f0ff'   // Cyan default
     };
-    const componentNodes: Node[] = design.components.map((component, index) => {
-      const isMCU = component.id === mcu?.id;
-      const y = isMCU ? Math.max(80, peripherals.length * 90) : 40 + index * 180;
 
-      return {
-        id: component.id,
-        position: { x: isMCU ? 20 : 760, y },
+    // 1. Build Component Nodes with realistic Electronics IC appearance
+    const componentNodes: Node[] = [];
+
+    // Place MCU on Left side with clear schematic spacing
+    if (mcu) {
+      componentNodes.push({
+        id: mcu.id,
+        type: 'schematicIc',
+        position: { x: 50, y: Math.max(80, (peripherals.length * 220) / 2 - 100) },
         data: {
-          label: (
-            <div style={{ padding: '10px', textAlign: 'center', minWidth: 150 }}>
-              <div style={{ fontWeight: 700, color: isMCU ? '#00d9e8' : '#e2e8f0' }}>{component.name}</div>
-              <div style={{ fontSize: 10, color: '#aab4c0', margin: '4px 0' }}>{component.category}</div>
-              <div style={{ fontSize: 10, color: '#d5dbe3' }}>{component.pins.join('  ·  ')}</div>
-            </div>
-          )
-        },
-        style: {
-          background: 'var(--bg-panel)',
-          border: `1px solid ${isMCU ? 'var(--accent-cyan)' : 'var(--border-color)'}`,
-          borderRadius: 6,
-          color: 'var(--text-main)',
-          boxShadow: isMCU ? '0 0 15px rgba(0,217,232,0.18)' : 'none',
-          width: 210,
-        },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-      };
-    });
+          name: mcu.name,
+          category: mcu.category,
+          package: mcu.package,
+          pins: mcu.pins,
+          isMCU: true
+        }
+      });
+    }
 
-    const groups = new Map<string, typeof design.pinMappings>();
-    design.pinMappings.forEach(mapping => {
-      const key = `${mapping.protocol}:${mapping.mcuPin}:${mapping.componentPin}`;
-      groups.set(key, [...(groups.get(key) ?? []), mapping]);
-    });
-
-    const netNodes: Node[] = [];
-    const netEdges: Edge[] = [];
-    let sharedNetIndex = 0;
-    groups.forEach((mappings, key) => {
-      const mapping = mappings[0];
-      const color = netColors[mapping.protocol] ?? '#9aa4b2';
-      const shared = mappings.length > 1;
-      const showJunction = shared || ['Power', 'GND', 'SPI'].includes(mapping.protocol);
-      const netId = `net-${key.replace(/[^a-zA-Z0-9-]/g, '-')}`;
-      const netLabel = mapping.protocol === 'Power'
-        ? `${mapping.mcuPin} POWER`
-        : mapping.protocol === 'GND'
-          ? 'GND'
-            : mapping.protocol === 'SPI'
-              ? `SPI ${mapping.componentPin}`
-          : ['SDA', 'SCL'].includes(mapping.componentPin)
-            ? `${mapping.protocol} ${mapping.componentPin}`
-            : `${mapping.protocol} ${mapping.mcuPin}`;
-
-      if (showJunction) {
-        const netY = 35 + sharedNetIndex * 88;
-        sharedNetIndex += 1;
-        netNodes.push({
-          id: netId,
-          position: { x: 405, y: netY },
-          data: { label: netLabel },
-          style: {
-            background: '#111820',
-            border: `1px solid ${color}`,
-            borderRadius: 5,
-            color,
-            fontSize: 11,
-            fontWeight: 700,
-            padding: '8px 10px',
-            width: 120,
-            textAlign: 'center',
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-        });
-        netEdges.push({
-          id: `${netId}-from-mcu`,
-          source: mcu?.id ?? '',
-          target: netId,
-          type: 'smoothstep',
-          label: mapping.mcuPin,
-          labelStyle: { fill: color, fontWeight: 700, fontSize: 11 },
-          labelBgStyle: { fill: '#0a0c10', fillOpacity: 0.95 },
-          style: { stroke: color, strokeWidth: 2.5 },
-        });
-        mappings.forEach((branch, index) => {
-          netEdges.push({
-            id: `${netId}-to-${branch.componentId}-${index}`,
-            source: netId,
-            target: branch.componentId,
-            type: 'smoothstep',
-            label: branch.componentPin,
-            labelStyle: { fill: color, fontWeight: 700, fontSize: 11 },
-            labelBgStyle: { fill: '#0a0c10', fillOpacity: 0.95 },
-            animated: mapping.protocol === 'I2C' || mapping.protocol === 'SPI',
-            style: { stroke: color, strokeWidth: 2.5 },
-          });
-        });
-        return;
-      }
-
-      mappings.forEach((branch, index) => {
-        netEdges.push({
-          id: `e-${key}-${branch.componentId}-${index}`,
-          source: mcu?.id ?? '',
-          target: branch.componentId,
-          type: 'smoothstep',
-          label: `${branch.mcuPin} → ${branch.componentPin}`,
-          labelStyle: { fill: color, fontWeight: 700, fontSize: 11 },
-          labelBgStyle: { fill: '#0a0c10', fillOpacity: 0.95 },
-          animated: ['I2C', 'SPI', 'UART'].includes(branch.protocol),
-          style: { stroke: color, strokeWidth: 2 },
-        });
+    // Place Peripheral ICs on Right side arranged neatly
+    peripherals.forEach((comp, idx) => {
+      componentNodes.push({
+        id: comp.id,
+        type: 'schematicIc',
+        position: { x: 620, y: 50 + idx * 240 },
+        data: {
+          name: comp.name,
+          category: comp.category,
+          package: comp.package,
+          pins: comp.pins,
+          isMCU: false
+        }
       });
     });
 
-    return { nodes: [...componentNodes, ...netNodes], edges: netEdges, netCount: groups.size };
+    // 2. Build Realistic Schematic Net Edges with Color Coding & Pin Labels
+    const schematicEdges: Edge[] = [];
+    const netCountSet = new Set<string>();
+
+    design.pinMappings.forEach((mapping, idx) => {
+      const netKey = `${mapping.protocol}:${mapping.mcuPin}:${mapping.componentPin}`;
+      netCountSet.add(netKey);
+
+      const color = mapping.protocol === 'Power' 
+        ? '#ef4444' 
+        : mapping.protocol === 'GND' 
+          ? '#64748b' 
+          : mapping.protocol === 'I2C' && mapping.componentPin.toLowerCase().includes('scl')
+            ? '#eab308' // Yellow for SCL
+            : mapping.protocol === 'I2C'
+              ? '#3b82f6' // Blue for SDA
+              : wireColors[mapping.protocol] || '#00f0ff';
+
+      schematicEdges.push({
+        id: `wire-${idx}-${mapping.componentId}-${mapping.mcuPin}`,
+        source: mcu?.id || '',
+        target: mapping.componentId,
+        sourceHandle: 'right-out',
+        targetHandle: 'left-in',
+        type: 'smoothstep', // Realistic right-angle PCB/schematic routing
+        animated: mapping.protocol === 'I2C' || mapping.protocol === 'SPI' || mapping.protocol === 'I2S',
+        label: `${mapping.mcuPin} ──▶ ${mapping.componentPin} (${mapping.protocol})`,
+        labelStyle: { 
+          fill: color, 
+          fontWeight: 700, 
+          fontSize: 11,
+          fontFamily: 'JetBrains Mono, monospace'
+        },
+        labelBgStyle: { 
+          fill: '#0f131a', 
+          fillOpacity: 0.95,
+          rx: 4,
+          ry: 4
+        },
+        labelBgPadding: [6, 4],
+        style: { 
+          stroke: color, 
+          strokeWidth: mapping.protocol === 'Power' || mapping.protocol === 'GND' ? 2.5 : 2,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: color,
+          width: 14,
+          height: 14
+        }
+      });
+    });
+
+    return { nodes: componentNodes, edges: schematicEdges, netCount: netCountSet.size };
   }, [design]);
 
   useEffect(() => {
@@ -155,13 +182,6 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
     document.addEventListener('fullscreenchange', updateFullscreenState);
     return () => document.removeEventListener('fullscreenchange', updateFullscreenState);
   }, []);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      flowRef.current?.fitView({ padding: 0.2, minZoom: 0.45, maxZoom: 1.15 });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [isFullscreen]);
 
   const toggleFullscreen = async () => {
     const canvas = canvasRef.current;
@@ -174,52 +194,77 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
     }
   };
 
+  const handleResetView = () => {
+    flowRef.current?.fitView({ padding: 0.2, minZoom: 0.45, maxZoom: 1.15 });
+  };
+
   return (
-    <section className="schematic-viewer" aria-label={`${design.title} circuit diagram`}>
+    <section className="schematic-viewer" aria-label={`${design.title} practical circuit schematic`}>
+      {/* Top Header */}
       <div className="schematic-heading">
         <div>
-          <h2>Circuit Diagram</h2>
-          <p>{design.title}</p>
+          <h2>Practical Electrical Circuit Diagram</h2>
+          <p>{design.title} — Real-world IC pinout and connection schematic for laboratory implementation.</p>
         </div>
         <div className="schematic-counts">
-          <span className="badge badge-cyan">{design.components.length} Components</span>
-          <span className="badge badge-emerald">{netCount} Nets</span>
+          <span className="badge badge-cyan">{design.components.length} IC Packages</span>
+          <span className="badge badge-emerald">{netCount} Active Nets</span>
         </div>
       </div>
-      <p className="schematic-description">{design.description}</p>
-      <div className="schematic-legend" aria-label="Wire color legend">
-        <span><i style={{ background: '#ef5350' }} />3.3V power</span>
-        <span><i style={{ background: '#9aa4b2' }} />Ground</span>
-        <span><i style={{ background: '#ffb74d' }} />I²C data and clock</span>
-        <span><i style={{ background: '#4fc3f7' }} />SPI signals</span>
-        <span className="schematic-legend-note">Use the controls to zoom; drag the canvas to inspect connections.</span>
+
+      {/* Wire Color Code Standards for Lab Students */}
+      <div className="schematic-standards-bar">
+        <div className="standards-title">
+          <Zap size={15} /> Standard Lab Wire Color Codes:
+        </div>
+        <div className="standards-items">
+          <span className="standard-item"><i style={{ background: '#ef4444' }} /> Red: 3.3V VCC Power</span>
+          <span className="standard-item"><i style={{ background: '#64748b' }} /> Black: Common Ground (GND)</span>
+          <span className="standard-item"><i style={{ background: '#eab308' }} /> Yellow: Clock (SCL / SCK)</span>
+          <span className="standard-item"><i style={{ background: '#3b82f6' }} /> Blue: Data (SDA / MOSI)</span>
+          <span className="standard-item"><i style={{ background: '#a855f7' }} /> Purple: SPI CS / UART</span>
+          <span className="standard-item"><i style={{ background: '#00f0ff' }} /> Cyan: GPIO / Control</span>
+        </div>
       </div>
 
+      {/* Interactive Schematic Canvas */}
       <div className="schematic-canvas" ref={canvasRef}>
-        <button
-          className="schematic-fullscreen-toggle"
-          type="button"
-          onClick={toggleFullscreen}
-          aria-label={isFullscreen ? 'Exit fullscreen schematic' : 'View schematic fullscreen'}
-          title={isFullscreen ? 'Exit fullscreen' : 'View fullscreen'}
-        >
-          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-        </button>
+        <div className="schematic-toolbar">
+          <button 
+            className="toolbar-btn" 
+            onClick={handleResetView} 
+            title="Reset Zoom & Center View"
+          >
+            <RotateCcw size={16} /> Fit View
+          </button>
+          <button
+            className="toolbar-btn"
+            type="button"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen' : 'View fullscreen'}
+          >
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />} Fullscreen
+          </button>
+        </div>
+
         <ReactFlow 
           nodes={nodes} 
           edges={edges}
+          nodeTypes={nodeTypes}
           fitView
-          fitViewOptions={{ padding: 0.2, minZoom: 0.45, maxZoom: 1.15 }}
-          minZoom={0.35}
+          fitViewOptions={{ padding: 0.15, minZoom: 0.45, maxZoom: 1.15 }}
+          minZoom={0.3}
+          maxZoom={1.5}
           onInit={instance => { flowRef.current = instance; }}
           attributionPosition="bottom-right"
         >
-          <Background color="rgba(0, 240, 255, 0.1)" gap={20} />
+          {/* Engineering Dot Matrix / Grid Background */}
+          <Background color="rgba(0, 240, 255, 0.08)" gap={24} size={1.5} />
           <Controls style={{ background: 'var(--bg-panel)', fill: 'var(--text-main)', border: '1px solid var(--border-color)' }} />
           <MiniMap 
-            nodeColor={(n) => n.style?.borderColor as string || '#2b303b'}
-            maskColor="rgba(0, 0, 0, 0.7)"
-            style={{ background: 'var(--bg-panel)' }}
+            nodeColor={(n) => n.data?.isMCU ? '#00f0ff' : '#3b82f6'}
+            maskColor="rgba(0, 0, 0, 0.75)"
+            style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}
           />
         </ReactFlow>
       </div>
