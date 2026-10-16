@@ -28,9 +28,9 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
   const decouplingStatus: 'PASS' | 'FAIL' = hasDecouplingCap ? 'PASS' : 'FAIL';
 
   // 3. Voltage regulator capacitor presence
-  const hasRegulator = design.components.some(c => c.category === 'Power' || c.name.toLowerCase().includes('ams1117'));
+  const hasLinearRegulator = design.components.some(c => c.name.toLowerCase().includes('ams1117') || c.name.toLowerCase().includes('ldo'));
   const hasRegulatorCaps = design.components.some(c => c.name.toLowerCase().includes('10µf') || c.name.toLowerCase().includes('10uf') || c.name.toLowerCase().includes('regulator'));
-  const regCapStatus: 'PASS' | 'FAIL' = hasRegulator ? (hasRegulatorCaps ? 'PASS' : 'FAIL') : 'PASS';
+  const regCapStatus: 'PASS' | 'FAIL' = hasLinearRegulator ? (hasRegulatorCaps ? 'PASS' : 'FAIL') : 'PASS';
 
   // 4. I2C address conflict detection
   const i2cAddresses = new Set<string>();
@@ -47,12 +47,15 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
   });
   const i2cConflictStatus: 'PASS' | 'FAIL' = hasAddressConflict ? 'FAIL' : 'PASS';
 
-  // 5. Logic level compatibility (3.3V vs 5V)
+  // 5. Logic level compatibility (3.3V vs 5V on data lines)
   const mcu = design.components.find(c => c.category === 'MCU');
-  const hasVoltageMismatch = design.components.some(c => 
-    c.id !== mcu?.id && c.operatingVoltage && mcu?.operatingVoltage && c.operatingVoltage > mcu.operatingVoltage && !c.name.toLowerCase().includes('ams1117')
-  );
-  const logicLevelStatus: 'PASS' | 'FAIL' = hasVoltageMismatch ? 'FAIL' : 'PASS';
+  // Check if any digital signal line interfaces a 5V component directly to a 3.3V MCU
+  const hasDigitalVoltageMismatch = design.pinMappings.some(mapping => {
+    if (mapping.protocol === 'Power' || mapping.protocol === 'GND') return false;
+    const comp = design.components.find(c => c.id === mapping.componentId);
+    return comp && comp.operatingVoltage && mcu?.operatingVoltage && comp.operatingVoltage > mcu.operatingVoltage;
+  });
+  const logicLevelStatus: 'PASS' | 'FAIL' = hasDigitalVoltageMismatch ? 'FAIL' : 'PASS';
 
   // Overall Readiness
   const isOverallReady = errors.length === 0 && 

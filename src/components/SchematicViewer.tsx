@@ -450,8 +450,8 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         </ReactFlow>
       </div>
 
-      {/* Suggestion 3: Integrated Virtual Oscilloscope / I2C Bus Waveform Analyzer */}
-      <OscilloscopeViewer isSimulating={isSimulating} />
+      {/* Suggestion 3: Integrated Virtual Oscilloscope / Protocol Bus Waveform Analyzer */}
+      <OscilloscopeViewer isSimulating={isSimulating} design={design} />
     </section>
   );
 };
