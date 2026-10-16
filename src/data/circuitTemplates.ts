@@ -15,7 +15,7 @@ export const templates: Record<string, CircuitDesign> = {
         estimatedCost: 350.00,
         pins: ['3V3', 'GND', 'EN', 'IO21', 'IO22', 'IO34', 'IO35', 'IO2'],
         operatingVoltage: 3.3,
-        maxCurrent_mA: 240,
+        maxCurrent_mA: 240, // 240mA average, 350mA peak (WiFi TX)
         pinDescriptions: {
           '3V3': 'Regulated 3.3V DC Power Output (max 500mA)',
           'GND': 'System Common Ground (0V Reference)',
@@ -32,14 +32,15 @@ export const templates: Record<string, CircuitDesign> = {
         category: 'Sensor',
         package: 'LGA-8 Module',
         estimatedCost: 420.00,
-        pins: ['VCC', 'GND', 'SCL', 'SDA'],
+        pins: ['VCC', 'GND', 'SCL', 'SDA', 'SDO'],
         operatingVoltage: 3.3,
-        maxCurrent_mA: 1,
+        maxCurrent_mA: 1, // 1mA active, 0.1µA sleep
         pinDescriptions: {
           'VCC': 'Power Supply Input (3.3V recommended)',
           'GND': 'Circuit Ground',
           'SCL': 'I2C Serial Clock input from MCU IO22',
-          'SDA': 'I2C Serial Data bidirectional line to MCU IO21'
+          'SDA': 'I2C Serial Data bidirectional line to MCU IO21',
+          'SDO': 'I2C Address Select Pin (GND=0x76, VCC=0x77)'
         }
       },
       {
@@ -51,24 +52,129 @@ export const templates: Record<string, CircuitDesign> = {
         estimatedCost: 280.00,
         pins: ['VCC', 'GND', 'SCL', 'SDA'],
         operatingVoltage: 3.3,
-        maxCurrent_mA: 25,
+        maxCurrent_mA: 20, // 20mA typical, 30mA max
         pinDescriptions: {
           'VCC': 'Display Logic & Driver Power (3.3V)',
           'GND': 'Display Ground',
           'SCL': 'I2C Serial Clock Input (Shared with BME280)',
           'SDA': 'I2C Serial Data Input/Output (Shared with BME280)'
         }
+      },
+      {
+        id: 'vr1',
+        name: 'AMS1117-3.3V Regulator',
+        description: 'Low-Dropout 3.3V Voltage Regulator IC (Quiescent 5mA)',
+        category: 'Power',
+        package: 'SOT-223',
+        estimatedCost: 25.00,
+        pins: ['VIN', 'VOUT', 'GND'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 5
+      },
+      {
+        id: 'r_sda',
+        name: '4.7kΩ Pull-Up Resistor (SDA)',
+        description: '4.7kΩ I2C bus pull-up resistor to 3.3V for SDA line',
+        category: 'Passive',
+        package: '0805 / Axial',
+        estimatedCost: 2.00,
+        pins: ['1', '2'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 1
+      },
+      {
+        id: 'r_scl',
+        name: '4.7kΩ Pull-Up Resistor (SCL)',
+        description: '4.7kΩ I2C bus pull-up resistor to 3.3V for SCL line',
+        category: 'Passive',
+        package: '0805 / Axial',
+        estimatedCost: 2.00,
+        pins: ['1', '2'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 1
+      },
+      {
+        id: 'c_esp',
+        name: '100nF Decoupling Capacitor (ESP32)',
+        description: 'Ceramic decoupling capacitor within 5mm of ESP32 3V3 pin',
+        category: 'Passive',
+        package: '0805 MLCC',
+        estimatedCost: 3.00,
+        pins: ['1', '2'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 0
+      },
+      {
+        id: 'c_bme',
+        name: '100nF Decoupling Capacitor (BME280)',
+        description: 'Ceramic decoupling capacitor within 5mm of BME280 VCC pin',
+        category: 'Passive',
+        package: '0805 MLCC',
+        estimatedCost: 3.00,
+        pins: ['1', '2'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 0
+      },
+      {
+        id: 'c_oled',
+        name: '100nF Decoupling Capacitor (OLED)',
+        description: 'Ceramic decoupling capacitor within 5mm of OLED VCC pin',
+        category: 'Passive',
+        package: '0805 MLCC',
+        estimatedCost: 3.00,
+        pins: ['1', '2'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 0
+      },
+      {
+        id: 'c_reg_in',
+        name: '10µF Input Capacitor (AMS1117)',
+        description: 'Bulk input capacitor for AMS1117 regulator',
+        category: 'Passive',
+        package: 'Radial',
+        estimatedCost: 5.00,
+        pins: ['1', '2'],
+        operatingVoltage: 5.0,
+        maxCurrent_mA: 0
+      },
+      {
+        id: 'c_reg_out',
+        name: '10µF Output Capacitor (AMS1117)',
+        description: 'Bulk output capacitor for AMS1117 3.3V output rail',
+        category: 'Passive',
+        package: 'Radial',
+        estimatedCost: 5.00,
+        pins: ['1', '2'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 0
       }
     ],
     pinMappings: [
+      { mcuPin: '3V3', componentId: 'vr1', componentPin: 'VOUT', protocol: 'Power', description: 'AMS1117 3.3V output powering system rail', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'vr1', componentPin: 'GND', protocol: 'GND', description: 'AMS1117 Ground connection to blue rail', wireColor: '#1e293b' },
       { mcuPin: '3V3', componentId: 's1', componentPin: 'VCC', protocol: 'Power', description: '3.3V Power Rail to BME280 Sensor', wireColor: '#ef4444' },
       { mcuPin: '3V3', componentId: 'd1', componentPin: 'VCC', protocol: 'Power', description: '3.3V Power Rail to OLED Display', wireColor: '#ef4444' },
       { mcuPin: 'GND', componentId: 's1', componentPin: 'GND', protocol: 'GND', description: 'Common Ground connection to BME280', wireColor: '#1e293b' },
       { mcuPin: 'GND', componentId: 'd1', componentPin: 'GND', protocol: 'GND', description: 'Common Ground connection to OLED', wireColor: '#1e293b' },
+      { mcuPin: 'GND', componentId: 's1', componentPin: 'SDO', protocol: 'GND', description: 'BME280 SDO pin pulled to GND for I2C address 0x76', wireColor: '#1e293b' },
       { mcuPin: 'IO21', componentId: 's1', componentPin: 'SDA', protocol: 'I2C', description: 'Shared I2C Data Line (SDA)', wireColor: '#3b82f6' },
       { mcuPin: 'IO21', componentId: 'd1', componentPin: 'SDA', protocol: 'I2C', description: 'Shared I2C Data Line (SDA)', wireColor: '#3b82f6' },
       { mcuPin: 'IO22', componentId: 's1', componentPin: 'SCL', protocol: 'I2C', description: 'Shared I2C Clock Line (SCL)', wireColor: '#eab308' },
-      { mcuPin: 'IO22', componentId: 'd1', componentPin: 'SCL', protocol: 'I2C', description: 'Shared I2C Clock Line (SCL)', wireColor: '#eab308' }
+      { mcuPin: 'IO22', componentId: 'd1', componentPin: 'SCL', protocol: 'I2C', description: 'Shared I2C Clock Line (SCL)', wireColor: '#eab308' },
+      { mcuPin: '3V3', componentId: 'r_sda', componentPin: '1', protocol: 'Power', description: '4.7kΩ pull-up connected between 3.3V rail and SDA line', wireColor: '#ef4444' },
+      { mcuPin: 'IO21', componentId: 'r_sda', componentPin: '2', protocol: 'I2C', description: 'I2C SDA line pulled up through 4.7kΩ resistor', wireColor: '#3b82f6' },
+      { mcuPin: '3V3', componentId: 'r_scl', componentPin: '1', protocol: 'Power', description: '4.7kΩ pull-up connected between 3.3V rail and SCL line', wireColor: '#ef4444' },
+      { mcuPin: 'IO22', componentId: 'r_scl', componentPin: '2', protocol: 'I2C', description: 'I2C SCL line pulled up through 4.7kΩ resistor', wireColor: '#eab308' },
+      { mcuPin: '3V3', componentId: 'c_esp', componentPin: '1', protocol: 'Power', description: '100nF decoupling capacitor across ESP32 3V3', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'c_esp', componentPin: '2', protocol: 'GND', description: '100nF decoupling capacitor return to GND', wireColor: '#1e293b' },
+      { mcuPin: '3V3', componentId: 'c_bme', componentPin: '1', protocol: 'Power', description: '100nF decoupling cap placed within 5mm of BME280 VCC', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'c_bme', componentPin: '2', protocol: 'GND', description: 'BME280 decoupling ground return', wireColor: '#1e293b' },
+      { mcuPin: '3V3', componentId: 'c_oled', componentPin: '1', protocol: 'Power', description: '100nF decoupling cap placed within 5mm of OLED VCC', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'c_oled', componentPin: '2', protocol: 'GND', description: 'OLED decoupling ground return', wireColor: '#1e293b' },
+      { mcuPin: '3V3', componentId: 'c_reg_in', componentPin: '1', protocol: 'Power', description: '10µF input bulk capacitor on AMS1117 VIN', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'c_reg_in', componentPin: '2', protocol: 'GND', description: 'AMS1117 input capacitor ground', wireColor: '#1e293b' },
+      { mcuPin: '3V3', componentId: 'c_reg_out', componentPin: '1', protocol: 'Power', description: '10µF output bulk capacitor on AMS1117 VOUT', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'c_reg_out', componentPin: '2', protocol: 'GND', description: 'AMS1117 output capacitor ground', wireColor: '#1e293b' }
     ],
     labGuide: {
       voltageSupplyNote: 'ESP32 development boards operate natively at 3.3V logic. Never connect 5V to the IO21/IO22 pins directly as this will damage the ESP32 silicon.',

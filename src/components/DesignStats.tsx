@@ -20,18 +20,33 @@ const DesignStats: React.FC<DesignStatsProps> = ({ design }) => {
     return acc;
   }, {} as Record<string, number>);
 
-  // Universal Fix 2: Power Budget Calculation & Display
+  // Universal Fix 1: Power Budget Calculation & Display
   const mcu = design.components.find(c => c.category === 'MCU');
+  const isEsp32 = mcu?.name.toLowerCase().includes('esp32');
   const isArduinoUno = mcu?.name.toLowerCase().includes('uno') || mcu?.name.toLowerCase().includes('atmega328');
-  const mcuIdleCurrent = isArduinoUno ? 320 : (mcu?.maxCurrent_mA || (mcu?.name.toLowerCase().includes('esp32') ? 240 : 100));
   
-  // Calculate peripherals current (LED, sensors, actuators)
-  const nonMcuCurrent = design.components
-    .filter(c => c.id !== mcu?.id)
+  // MCU currents
+  const mcuAvgCurrent = isEsp32 ? 240 : isArduinoUno ? 320 : (mcu?.maxCurrent_mA || 100);
+  const mcuPeakCurrent = isEsp32 ? 350 : mcuAvgCurrent; // 350mA peak during WiFi TX
+  
+  // Peripherals breakdown
+  const bme280 = design.components.find(c => c.name.toLowerCase().includes('bme280') || c.name.toLowerCase().includes('dht'));
+  const oled = design.components.find(c => c.name.toLowerCase().includes('oled') || c.name.toLowerCase().includes('display'));
+  const regulator = design.components.find(c => c.category === 'Power' || c.name.toLowerCase().includes('ams1117'));
+
+  const bmeCurrent = bme280 ? (bme280.maxCurrent_mA || 1) : 0;
+  const oledCurrent = oled ? (oled.maxCurrent_mA || 20) : 0;
+  const regQuiescent = regulator ? (regulator.maxCurrent_mA || 5) : 0;
+
+  // Other peripherals if not in weather station
+  const hasLed = design.components.some(c => c.name.toLowerCase().includes('led'));
+  const otherPeripheralsCurrent = design.components
+    .filter(c => c.id !== mcu?.id && c.id !== bme280?.id && c.id !== oled?.id && c.id !== regulator?.id)
     .reduce((sum, c) => sum + (c.maxCurrent_mA || 0), 0);
-  
-  const ledCircuitCurrent = nonMcuCurrent > 0 ? nonMcuCurrent : 5;
-  const totalPeakCurrent = mcuIdleCurrent + ledCircuitCurrent;
+
+  const peripheralTotal = bmeCurrent + oledCurrent + regQuiescent + otherPeripheralsCurrent;
+  const totalTypicalCurrent = mcuAvgCurrent + peripheralTotal;
+  const totalPeakCurrent = isEsp32 ? (350 + (oled ? 30 : oledCurrent) + bmeCurrent + regQuiescent + otherPeripheralsCurrent) : (mcuPeakCurrent + peripheralTotal);
   const powerPercent = Math.min((totalPeakCurrent / 500) * 100, 100);
 
   const drcErrors = design.drcReport?.filter(r => r.type === 'Error').length || 0;
@@ -44,25 +59,45 @@ const DesignStats: React.FC<DesignStatsProps> = ({ design }) => {
           <Zap size={16} />
         </div>
         <div className="stat-body">
-          <div className="stat-value">{totalPeakCurrent}<span className="stat-unit">mA Peak</span></div>
+          <div className="stat-value">~{totalTypicalCurrent}<span className="stat-unit">mA Typ / {totalPeakCurrent}mA Peak</span></div>
           <div className="stat-label">Power Budget</div>
           
           {/* Detailed breakdown per requirement */}
           <div className="power-breakdown-box">
             <div className="power-item">
-              <span className="power-name">MCU Idle:</span>
-              <span className="power-val">{mcuIdleCurrent}mA ({mcu?.name || 'Controller'})</span>
+              <span className="power-name">{mcu?.name || 'MCU'}:</span>
+              <span className="power-val">{mcuAvgCurrent}mA avg ({isEsp32 ? '350mA WiFi TX peak' : 'baseline'})</span>
             </div>
-            <div className="power-item">
-              <span className="power-name">LED Circuit:</span>
-              <span className="power-val">~{ledCircuitCurrent}mA when active</span>
-            </div>
+            {bme280 && (
+              <div className="power-item">
+                <span className="power-name">{bme280.name}:</span>
+                <span className="power-val">1mA active (0.1µA sleep)</span>
+              </div>
+            )}
+            {oled && (
+              <div className="power-item">
+                <span className="power-name">{oled.name}:</span>
+                <span className="power-val">20mA typical (30mA max)</span>
+              </div>
+            )}
+            {regulator && (
+              <div className="power-item">
+                <span className="power-name">{regulator.name}:</span>
+                <span className="power-val">5mA quiescent</span>
+              </div>
+            )}
+            {hasLed && (
+              <div className="power-item">
+                <span className="power-name">LED Circuit:</span>
+                <span className="power-val">~5mA when active</span>
+              </div>
+            )}
             <div className="power-item power-total">
-              <span className="power-name">Total:</span>
-              <span className="power-val">{totalPeakCurrent}mA peak</span>
+              <span className="power-name">Total Draw:</span>
+              <span className="power-val">~{totalTypicalCurrent}mA typical, ~{totalPeakCurrent}mA peak</span>
             </div>
             <div className="power-baseline-note">
-              * {mcuIdleCurrent}mA is board baseline, not LED current
+              * {mcuAvgCurrent}mA is MCU baseline logic; safe for 500mA USB port
             </div>
           </div>
 

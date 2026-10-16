@@ -177,7 +177,11 @@ const PcbViewer: React.FC<PcbViewerProps> = ({ design }) => {
       <div className="pcb-warning-banner" role="alert">
         <span className="pcb-warning-icon">⚠️</span>
         <div className="pcb-warning-text">
-          <strong>CONCEPTUAL PLACEMENT ONLY — No routing or DRC.</strong> Export to KiCad/EasyEDA for fabrication.
+          <div><strong>CONCEPTUAL PLACEMENT ONLY — No routing or DRC.</strong> Export to KiCad/EasyEDA for fabrication.</div>
+          <div style={{ marginTop: '4px', fontSize: '0.82rem', opacity: 0.9 }}>
+            • <em>I2C requires pull-up resistors — not shown in conceptual view</em><br />
+            • <em>Decoupling capacitors omitted for clarity — required for stability</em>
+          </div>
         </div>
       </div>
 

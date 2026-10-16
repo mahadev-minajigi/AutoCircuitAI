@@ -226,43 +226,84 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.fillText('220Ω', resX + 20, resY + 18);
 
       // ── Physical Curved Jumper Wires (DuPont Cables) ─────────────
-      design.pinMappings.forEach((mapping, idx) => {
-        const wireColor = mapping.wireColor || (
-          mapping.protocol === 'Power' ? '#ef4444' :
-          mapping.protocol === 'GND' ? '#1e293b' :
-          mapping.protocol === 'I2C' && mapping.componentPin.toLowerCase().includes('scl') ? '#eab308' :
-          mapping.protocol === 'I2C' ? '#3b82f6' :
-          '#10b981'
-        );
+      // Fix 3: Power Distribution via Red (+) & Blue (-) Rails
+      const redRailY = startY + 28;
+      const blueRailY = startY + 54;
 
-        const target = compPositions.find(c => c.id === mapping.componentId);
-        const sourceX = mcuX + mcuWidth - 10;
-        const sourceY = mcuY + 20 + (idx % 6) * 12;
+      // 1. AMS1117 / MCU 3.3V power jumper to Red Rail
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(mcuX + 25, mcuY + 10);
+      ctx.quadraticCurveTo(mcuX + 30, startY + 15, mcuX + 60, redRailY);
+      ctx.stroke();
+      ctx.fillStyle = '#ef4444';
+      ctx.fillText('AMS1117 3.3V ──▶ Red Rail (+)', mcuX + 65, redRailY - 5);
 
-        const destX = target ? target.x + 20 + ((idx * 16) % (target.w - 40)) : startX + 400;
-        const destY = target ? target.y + target.h + 8 : trenchY + 40;
+      // 2. GND to Blue Rail
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(mcuX + 25, mcuY + 25);
+      ctx.quadraticCurveTo(mcuX + 30, startY + 45, mcuX + 80, blueRailY);
+      ctx.stroke();
+      ctx.fillStyle = '#3b82f6';
+      ctx.fillText('GND ──▶ Blue Rail (-)', mcuX + 85, blueRailY + 14);
 
-        // Draw curved wire
-        ctx.strokeStyle = wireColor;
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
+      // 3. Components powered from the Rails
+      compPositions.forEach((target) => {
+        // Red rail to Component VCC
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.moveTo(sourceX, sourceY);
-        const cpX = (sourceX + destX) / 2;
-        const cpY = Math.min(sourceY, destY) - 35 - (idx * 6);
-        ctx.quadraticCurveTo(cpX, cpY, destX, destY);
+        const tapX = target.x + 30;
+        ctx.moveTo(tapX, redRailY);
+        ctx.quadraticCurveTo(tapX - 10, target.y - 15, target.x + 25, target.y);
         ctx.stroke();
 
-        // Pin Terminal dots
-        ctx.fillStyle = '#0f172a';
-        ctx.strokeStyle = wireColor;
-        ctx.lineWidth = 2;
+        // Blue rail to Component GND
+        ctx.strokeStyle = '#3b82f6';
         ctx.beginPath();
-        ctx.arc(sourceX, sourceY, 4, 0, Math.PI * 2);
-        ctx.arc(destX, destY, 4, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(tapX + 20, blueRailY);
+        ctx.quadraticCurveTo(tapX + 10, target.y - 10, target.x + 45, target.y);
         ctx.stroke();
       });
+
+      // 4. Dedicated I2C Signal Lines: SDA -> GPIO21, SCL -> GPIO22
+      const sdaMcuX = mcuX + mcuWidth - 10;
+      const sdaMcuY = mcuY + 30;
+      const sclMcuX = mcuX + mcuWidth - 10;
+      const sclMcuY = mcuY + 45;
+
+      peripherals.forEach((comp, idx) => {
+        const target = compPositions.find(c => c.id === comp.id);
+        if (!target) return;
+
+        // SDA Jumper (Blue)
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(sdaMcuX, sdaMcuY);
+        const sdaDestX = target.x + 65;
+        const sdaDestY = target.y + target.h;
+        ctx.bezierCurveTo((sdaMcuX + sdaDestX) / 2, sdaMcuY + 60 + idx * 10, (sdaMcuX + sdaDestX) / 2, sdaDestY + 40, sdaDestX, sdaDestY);
+        ctx.stroke();
+
+        // SCL Jumper (Yellow)
+        ctx.strokeStyle = '#eab308';
+        ctx.beginPath();
+        ctx.moveTo(sclMcuX, sclMcuY);
+        const sclDestX = target.x + 85;
+        const sclDestY = target.y + target.h;
+        ctx.bezierCurveTo((sclMcuX + sclDestX) / 2, sclMcuY + 75 + idx * 10, (sclMcuX + sclDestX) / 2, sclDestY + 55, sclDestX, sclDestY);
+        ctx.stroke();
+      });
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 10px JetBrains Mono, monospace';
+      ctx.fillText('SDA ──▶ GPIO21 (Blue)', sdaMcuX - 60, sdaMcuY - 6);
+      ctx.fillStyle = '#eab308';
+      ctx.fillText('SCL ──▶ GPIO22 (Yellow)', sclMcuX - 60, sclMcuY + 16);
 
       // Bottom Legend
       ctx.fillStyle = '#94a3b8';
