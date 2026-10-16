@@ -315,8 +315,10 @@ JSON format requirements:
 }
 Every design MUST include exactly one MCU, correct power/GND connections, realistic pin numbers, and valid firmware."""
 
+        # Use gemini-2.5-flash-lite which is active and highly responsive
+        model_name = 'gemini-2.5-flash-lite'
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model=model_name,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
