@@ -57,13 +57,12 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
   });
   const logicLevelStatus: 'PASS' | 'FAIL' = hasDigitalVoltageMismatch ? 'FAIL' : 'PASS';
 
+  // Explicit check fails count
+  const explicitFails = [i2cPullupStatus, decouplingStatus, regCapStatus, i2cConflictStatus, logicLevelStatus].filter(s => s === 'FAIL').length;
+  const totalErrors = errors.length + explicitFails;
+
   // Overall Readiness
-  const isOverallReady = errors.length === 0 && 
-    i2cPullupStatus === 'PASS' && 
-    decouplingStatus === 'PASS' && 
-    regCapStatus === 'PASS' && 
-    i2cConflictStatus === 'PASS' && 
-    logicLevelStatus === 'PASS';
+  const isOverallReady = totalErrors === 0;
   const overallStatus: 'READY' | 'NOT READY' = isOverallReady ? 'READY' : 'NOT READY';
 
   const parseRule = (message: string) => {
@@ -87,8 +86,8 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
         </div>
 
         <div className="drc-counts-box">
-          <div className={`drc-count-badge ${errors.length > 0 ? 'drc-badge-error' : ''}`}>
-            <XCircle size={18} /> <span>{errors.length} Errors</span>
+          <div className={`drc-count-badge ${totalErrors > 0 ? 'drc-badge-error' : ''}`}>
+            <XCircle size={18} /> <span>{totalErrors} Errors</span>
           </div>
           <div className={`drc-count-badge ${warnings.length > 0 ? 'drc-badge-warn' : ''}`}>
             <AlertTriangle size={18} /> <span>{warnings.length} Warnings</span>
@@ -197,8 +196,11 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
           <p className="drc-check-desc">
             {overallStatus === 'READY' 
               ? 'Circuit passed essential electrical validation. Ready for prototyping.'
-              : 'Resolve outstanding DRC errors before manufacturing or powering on.'}
+              : 'Resolve outstanding DRC errors before custom PCB manufacturing or powering on bare silicon.'}
           </p>
+          <div style={{ marginTop: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px' }}>
+            💡 <strong>Hardware Context:</strong> If prototyping with pre-assembled breakout boards (ESP32 DevKit, BME280/SSD1306 modules), pull-ups and decoupling caps are already integrated onboard. For custom PCB fabrication with discrete ICs, external passives are strictly mandatory.
+          </div>
         </div>
       </div>
 
