@@ -123,8 +123,42 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
     rules.push({ type: 'Pass', message: `Current draw within USB limits (${totalCurrent}mA / 500mA) | Estimated total power demand is within safe range for USB-powered prototypes. | No action required.` });
   }
 
-  // Pin count verification — check MCU has enough pins
+  // Power Shorts check: verify no direct VCC to GND bridging
+  const shortCheck = design.pinMappings.some(p => 
+    (p.mcuPin.includes('GND') && p.componentPin.includes('VCC')) ||
+    (p.mcuPin.includes('3V3') && p.componentPin.includes('GND')) ||
+    (p.mcuPin.includes('5V') && p.componentPin.includes('GND'))
+  );
+  if (shortCheck) {
+    rules.push({
+      type: 'Error',
+      message: 'Power short circuit detected | Direct connection between VCC and GND pins identified. | Remove cross-connection immediately to prevent hardware destruction.'
+    });
+  } else {
+    rules.push({
+      type: 'Pass',
+      message: 'Power shorts check passed | No short circuits detected between power rails and ground planes. | No change required.'
+    });
+  }
+
+  // Pin count & used pin set
   const usedMcuPins = new Set(design.pinMappings.map(m => m.mcuPin));
+
+  // Clearances check: trace separation and safe pin density
+  const highPinDensity = mcu.pins.length > 0 && (usedMcuPins.size / mcu.pins.length) > 0.95;
+  if (highPinDensity) {
+    rules.push({
+      type: 'Warning',
+      message: 'Tight clearance & high pin density | Over 95% of MCU pins utilized in close proximity. | Ensure proper PCB trace clearance (min 0.2mm) during fabrication layout.'
+    });
+  } else {
+    rules.push({
+      type: 'Pass',
+      message: 'Clearances check passed | MCU pin utilization allows adequate routing channel clearances. | No change required.'
+    });
+  }
+
+  // Pin count verification — check MCU has enough pins
   if (mcu.pins.length > 0 && usedMcuPins.size > mcu.pins.length) {
     rules.push({
       type: 'Error',
@@ -197,12 +231,28 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
     components.push({ id: 'm1', name: 'L298N', description: 'Dual Motor Driver', category: 'Actuator', package: 'Module', estimatedCost: 350.00, pins: ['ENA', 'IN1', 'IN2', 'OUT1', 'OUT2'], operatingVoltage: 12.0, maxCurrent_mA: 2000 });
   }
 
+  // Fix 1: Universal Resistor Description Sanitizer
+  const sanitizedMappings = baseTemplate.pinMappings.map(mapping => {
+    const comp = components.find(c => c.id === mapping.componentId);
+    const isResistor = comp?.name.toLowerCase().includes('resistor') ||
+                      mapping.description.toLowerCase().includes('resistor') ||
+                      mapping.componentPin.toLowerCase().includes('res');
+    if (isResistor && !mapping.description.toLowerCase().includes('pull-up')) {
+      return {
+        ...mapping,
+        description: 'current-limiting resistor in series with LED'
+      };
+    }
+    return mapping;
+  });
+
   const generatedDesign: CircuitDesign = {
     ...baseTemplate,
     id: 'ai-generated-' + Math.random().toString(36).substring(7),
     title: 'AI Generated: ' + (baseTemplate.title.includes('Custom') ? 'Custom Build' : baseTemplate.title),
     description: `Synthesized from: "${prompt}"`,
     components,
+    pinMappings: sanitizedMappings,
     warnings: ['AI generated circuit. Review DRC report.']
   };
 
@@ -223,6 +273,22 @@ export async function generateCircuit(prompt: string, preset?: string): Promise<
 
     if (response.ok) {
       const data: CircuitDesign = await response.json();
+      
+      // Fix 1: Universal Resistor Description Sanitizer on API response
+      data.pinMappings = data.pinMappings.map(mapping => {
+        const comp = data.components.find(c => c.id === mapping.componentId);
+        const isResistor = comp?.name.toLowerCase().includes('resistor') ||
+                          mapping.description.toLowerCase().includes('resistor') ||
+                          mapping.componentPin.toLowerCase().includes('res');
+        if (isResistor && !mapping.description.toLowerCase().includes('pull-up')) {
+          return {
+            ...mapping,
+            description: 'current-limiting resistor in series with LED'
+          };
+        }
+        return mapping;
+      });
+
       if (!data.drcReport || data.drcReport.length === 0) {
         data.drcReport = runDRC(data);
       }

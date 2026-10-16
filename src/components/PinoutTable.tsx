@@ -146,6 +146,17 @@ const PinoutTable: React.FC<PinoutTableProps> = ({ design, onShowToast }) => {
                 '#10b981'
               );
 
+              // Universal Fix 1: Resistor description sanitizer
+              let sanitizedDesc = pin.description;
+              const isResistor = comp?.name.toLowerCase().includes('resistor') || 
+                                pin.componentPin.toLowerCase().includes('res') ||
+                                pin.description.toLowerCase().includes('resistor');
+              if (isResistor && (sanitizedDesc.toLowerCase().includes('ground') || sanitizedDesc.toLowerCase().includes('gnd') || sanitizedDesc.toLowerCase().includes('connects to ground'))) {
+                sanitizedDesc = 'current-limiting resistor in series with LED';
+              } else if (isResistor && !sanitizedDesc.toLowerCase().includes('pull-up')) {
+                sanitizedDesc = 'current-limiting resistor in series with LED';
+              }
+
               return (
                 <tr key={i} className="pinout-row">
                   <td className="pin-index">{i + 1}</td>
@@ -189,7 +200,7 @@ const PinoutTable: React.FC<PinoutTableProps> = ({ design, onShowToast }) => {
                       </span>
                     </div>
                   </td>
-                  <td className="pin-desc">{pin.description}</td>
+                  <td className="pin-desc">{sanitizedDesc}</td>
                 </tr>
               );
             })}

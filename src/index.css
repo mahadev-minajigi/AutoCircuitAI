@@ -1541,8 +1541,294 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   ENHANCED PINOUT TABLE STYLES
+   PCB PROMINENT FABRICATION WARNING BANNER (FIX 3)
    ══════════════════════════════════════════════════════════════ */
+.pcb-warning-banner {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1.5px solid #f59e0b;
+  border-radius: 8px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  margin-bottom: 6px;
+  animation: pulse-border 3s infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
+  50% { border-color: #fbbf24; box-shadow: 0 0 18px rgba(245, 158, 11, 0.4); }
+}
+
+.pcb-warning-icon {
+  font-size: 1.4rem;
+}
+
+.pcb-warning-text {
+  font-size: 0.9rem;
+  color: #fef08a;
+  line-height: 1.4;
+}
+
+.pcb-warning-text strong {
+  color: #fbbf24;
+  letter-spacing: 0.3px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   POWER BUDGET DETAILED BREAKDOWN (FIX 2)
+   ══════════════════════════════════════════════════════════════ */
+.stat-card-power-budget {
+  grid-column: span 1;
+}
+
+.power-breakdown-box {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.power-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.power-name {
+  color: var(--text-muted);
+}
+
+.power-val {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.power-item.power-total {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+.power-item.power-total .power-name {
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.power-item.power-total .power-val {
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.power-baseline-note {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DRC VALIDATION STATUS GRID (FIX 4)
+   ══════════════════════════════════════════════════════════════ */
+.drc-report-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.drc-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.drc-header-row h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drc-subtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+.drc-counts-box {
+  display: flex;
+  gap: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  border-radius: 8px;
+}
+
+.drc-count-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.drc-badge-error { color: var(--accent-rose); }
+.drc-badge-warn { color: var(--accent-amber); }
+.drc-badge-pass { color: var(--accent-emerald); }
+
+.drc-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.drc-check-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.2s;
+}
+
+.drc-check-card:hover {
+  transform: translateY(-2px);
+}
+
+.drc-check-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.drc-check-title {
+  font-weight: 600;
+  color: var(--text-main);
+  text-transform: capitalize;
+}
+
+.drc-check-status {
+  margin: 4px 0;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+}
+
+.status-pass {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid #10b981;
+}
+
+.status-fail {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid #ef4444;
+}
+
+.drc-overall-card {
+  border-width: 2px;
+}
+
+.overall-ready {
+  border-color: #00f0ff;
+  background: rgba(0, 240, 255, 0.06);
+}
+
+.overall-not-ready {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.status-ready {
+  background: rgba(0, 240, 255, 0.2);
+  color: #00f0ff;
+  border: 1.5px solid #00f0ff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+}
+
+.status-not-ready {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1.5px solid #ef4444;
+}
+
+.drc-check-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.drc-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.drc-rule-card {
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.drc-rule-icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.drc-rule-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.drc-rule-tag {
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+.drc-problem-text {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.drc-reason-text, .drc-fix-text {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .pinout-container {
   display: flex;
   flex-direction: column;

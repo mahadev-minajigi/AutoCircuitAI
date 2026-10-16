@@ -165,11 +165,19 @@ const PcbViewer: React.FC<PcbViewerProps> = ({ design }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 600 }}>PCB Layout Preview</h2>
-          <p style={{ color: 'var(--text-muted)' }}>Conceptual placement for {design.title}; not fabrication-ready routing.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Interactive 2D component placement and net connectivity preview.</p>
         </div>
         <div className="schematic-counts">
           <span className="badge badge-cyan">{design.components.length} Components</span>
           <span className="badge badge-emerald">{design.pinMappings.length} Connections</span>
+        </div>
+      </div>
+
+      {/* Prominent Fabrication Warning Banner */}
+      <div className="pcb-warning-banner" role="alert">
+        <span className="pcb-warning-icon">⚠️</span>
+        <div className="pcb-warning-text">
+          <strong>CONCEPTUAL PLACEMENT ONLY — No routing or DRC.</strong> Export to KiCad/EasyEDA for fabrication.
         </div>
       </div>
 
