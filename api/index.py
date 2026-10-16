@@ -160,8 +160,11 @@ TEMPLATES = {
         "components": [
             {"id": "mcu1", "name": "ESP32-WROOM-32", "description": "Dual-core Wi-Fi & BLE Microcontroller", "category": "MCU", "package": "QFN-48", "estimatedCost": 350.00, "pins": ["3V3", "GND", "GPIO21", "GPIO22", "GPIO34", "GPIO35", "GPIO2", "EN"], "operatingVoltage": 3.3, "maxCurrent_mA": 240},
             {"id": "s1", "name": "BME280", "description": "Digital Temperature, Humidity & Pressure Sensor", "category": "Sensor", "package": "LGA-8", "estimatedCost": 220.00, "pins": ["VCC", "GND", "SDA", "SCL"], "operatingVoltage": 3.3, "maxCurrent_mA": 1},
-            {"id": "d1", "name": "SSD1306 0.96 OLED", "description": "128x64 Monochrome I2C OLED Display", "category": "Actuator", "package": "Module", "estimatedCost": 180.00, "pins": ["VCC", "GND", "SDA", "SCL"], "operatingVoltage": 3.3, "maxCurrent_mA": 25},
-            {"id": "p1", "name": "AMS1117-3.3", "description": "3.3V Low-Dropout Voltage Regulator", "category": "Power", "package": "SOT-223", "estimatedCost": 25.00, "pins": ["VIN", "VOUT", "GND"], "operatingVoltage": 3.3, "maxCurrent_mA": 800}
+            {"id": "d1", "name": "SSD1306 0.96 OLED", "description": "128x64 Monochrome I2C OLED Display", "category": "Actuator", "package": "Module", "estimatedCost": 180.00, "pins": ["VCC", "GND", "SDA", "SCL"], "operatingVoltage": 3.3, "maxCurrent_mA": 20},
+            {"id": "p1", "name": "AMS1117-3.3", "description": "3.3V Low-Dropout Voltage Regulator (5mA quiescent)", "category": "Power", "package": "SOT-223", "estimatedCost": 25.00, "pins": ["VIN", "VOUT", "GND"], "operatingVoltage": 3.3, "maxCurrent_mA": 5},
+            {"id": "r1", "name": "4.7kΩ Pull-Up Resistor (SDA)", "description": "I2C SDA pull-up to 3.3V", "category": "Passive", "package": "0805", "estimatedCost": 2.00, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 1},
+            {"id": "r2", "name": "4.7kΩ Pull-Up Resistor (SCL)", "description": "I2C SCL pull-up to 3.3V", "category": "Passive", "package": "0805", "estimatedCost": 2.00, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 1},
+            {"id": "c1", "name": "100nF Decoupling Capacitor", "description": "Ceramic bypass capacitor for ESP32/Sensors", "category": "Passive", "package": "0805", "estimatedCost": 3.00, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0}
         ],
         "pinMappings": [
             {"mcuPin": "3V3", "componentId": "s1", "componentPin": "VCC", "protocol": "Power", "description": "3.3V Power to BME280"},
@@ -313,7 +316,10 @@ JSON format requirements:
   "firmwareCode": "Complete, working Arduino C++ starter sketch (.ino)",
   "warnings": ["Array of engineering notes, constraints, or warnings"]
 }
-Every design MUST include exactly one MCU, correct power/GND connections, realistic pin numbers, and valid firmware."""
+CRITICAL ELECTRICAL RULES:
+1. For regulators (e.g., AMS1117-3.3), maxCurrent_mA must be the QUIESCENT current (~5mA), NOT the rated 800mA output capacity.
+2. ESP32 typical current is ~240mA (350mA peak WiFi TX). Sensors like BME280 draw ~1mA, OLED displays draw ~20mA.
+3. Every design MUST include exactly one MCU, correct power/GND connections, realistic pin numbers, and valid firmware."""
 
         # Use gemini-2.5-flash-lite which is active and highly responsive
         model_name = 'gemini-2.5-flash-lite'

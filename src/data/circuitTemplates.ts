@@ -224,7 +224,8 @@ export const templates: Record<string, CircuitDesign> = {
       troubleshootingTips: [
         'Display stays black: Verify OLED I2C address is 0x3C in code; on some cheaper clones the address is 0x3D.',
         'Sensor shows "Could not find valid BME280": Check if your module uses address 0x77 instead of 0x76. Change bme.begin(0x76) to bme.begin(0x77).',
-        'Garbled text or resets: ESP32 Wi-Fi bursts draw up to 240mA. Ensure your USB cable is capable of data + power (avoid charging-only thin cables).'
+        'Garbled text or resets: ESP32 Wi-Fi bursts draw up to 240mA (350mA peak TX). Ensure your USB cable is capable of data + power (avoid charging-only thin cables).',
+        'Custom PCB vs Breakout Modules: Commercial breakout modules usually include onboard 4.7kΩ/10kΩ pull-ups. If fabricating a custom PCB with raw discrete ICs (QFN/LGA packages), discrete 4.7kΩ external pull-ups to 3.3V on GPIO21 (SDA) and GPIO22 (SCL) are strictly mandatory.'
       ]
     },
     firmwareCode: `#include <Wire.h>
