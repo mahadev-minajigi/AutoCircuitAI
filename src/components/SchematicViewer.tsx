@@ -11,6 +11,7 @@ import {
   Hand
 } from 'lucide-react';
 import type { CircuitDesign } from '../types/circuit';
+import OscilloscopeViewer from './OscilloscopeViewer';
 import ReactFlow, { 
   Background, 
   Controls, 
@@ -448,6 +449,9 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           />
         </ReactFlow>
       </div>
+
+      {/* Suggestion 3: Integrated Virtual Oscilloscope / I2C Bus Waveform Analyzer */}
+      <OscilloscopeViewer isSimulating={isSimulating} />
     </section>
   );
 };

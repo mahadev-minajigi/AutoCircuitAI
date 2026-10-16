@@ -2422,4 +2422,158 @@ body {
   font-weight: 700;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   SUGGESTION 2: 2D PHYSICAL BREADBOARD VISUALIZER STYLES
+   ══════════════════════════════════════════════════════════════ */
+.breadboard-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.breadboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.breadboard-header h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.breadboard-header p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.breadboard-canvas-card {
+  background: #0a0d14;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  overflow-x: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.breadboard-canvas {
+  display: block;
+  width: 100%;
+  height: 540px;
+  border-radius: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SUGGESTION 3: VIRTUAL OSCILLOSCOPE & LOGIC ANALYZER STYLES
+   ══════════════════════════════════════════════════════════════ */
+.oscilloscope-card {
+  background: #080d14;
+  border: 1px solid rgba(0, 255, 136, 0.25);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-top: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+.oscilloscope-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.scope-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #00ff88;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.scope-icon {
+  color: #00ff88;
+  animation: pulse-icon 2s infinite;
+}
+
+@keyframes pulse-icon {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.scope-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scope-ch-btn {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.2s;
+}
+
+.ch1-btn {
+  background: rgba(234, 179, 8, 0.1);
+  border-color: #ca8a04;
+  color: #eab308;
+}
+.ch1-btn.active {
+  background: rgba(234, 179, 8, 0.25);
+  box-shadow: 0 0 10px rgba(234, 179, 8, 0.4);
+}
+
+.ch2-btn {
+  background: rgba(0, 240, 255, 0.1);
+  border-color: #0284c7;
+  color: #00f0ff;
+}
+.ch2-btn.active {
+  background: rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+}
+
+.scope-run-btn {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 12px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.scope-run-btn:hover {
+  border-color: #00ff88;
+  color: #00ff88;
+}
+
+.scope-screen-wrapper {
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.scope-canvas {
+  display: block;
+  width: 100%;
+  height: 160px;
+}
+
+
 

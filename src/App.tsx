@@ -8,14 +8,15 @@ import CodeEditor from './components/CodeEditor';
 import PcbViewer from './components/PcbViewer';
 import DrcReport from './components/DrcReport';
 import LabGuideView from './components/LabGuideView';
+import BreadboardVisualizer from './components/BreadboardVisualizer';
 import DesignHistory, { type HistoryEntry } from './components/DesignHistory';
 import DesignStats from './components/DesignStats';
 import Toast, { type ToastMessage } from './components/Toast';
-import { Cpu, List, FileCode2, CircuitBoard, LayoutDashboard, ShieldCheck, BookOpen } from 'lucide-react';
+import { Cpu, List, FileCode2, CircuitBoard, LayoutDashboard, ShieldCheck, BookOpen, Layers } from 'lucide-react';
 import { generateCircuit } from './services/aiCircuitEngine';
 import type { CircuitDesign } from './types/circuit';
 
-type TabId = 'schematic' | 'lab' | 'pinout' | 'bom' | 'code' | 'pcb' | 'drc';
+type TabId = 'schematic' | 'breadboard' | 'lab' | 'pinout' | 'bom' | 'code' | 'pcb' | 'drc';
 
 const workflowSteps = [
   'User Prompt',
@@ -157,6 +158,7 @@ function App() {
               <div className="tabs-header">
                 {([
                   { id: 'schematic' as TabId, icon: LayoutDashboard, label: 'Schematic', badge: null as 'error' | 'warn' | null },
+                  { id: 'breadboard' as TabId, icon: Layers, label: 'Breadboard View', badge: null as 'error' | 'warn' | null },
                   { id: 'lab' as TabId, icon: BookOpen, label: 'Practical Lab Guide', badge: null as 'error' | 'warn' | null },
                   { id: 'drc' as TabId, icon: ShieldCheck, label: 'DRC Report', badge: (drcErrorCount > 0 ? 'error' : drcWarnCount > 0 ? 'warn' : null) as 'error' | 'warn' | null },
                   { id: 'pinout' as TabId, icon: Cpu, label: 'Pin Mapping', badge: null as 'error' | 'warn' | null },
@@ -178,6 +180,7 @@ function App() {
 
               <div className="tab-content">
                 {activeTab === 'schematic' && <SchematicViewer design={design} />}
+                {activeTab === 'breadboard' && <BreadboardVisualizer design={design} onShowToast={showToast} />}
                 {activeTab === 'lab' && <LabGuideView design={design} onShowToast={showToast} />}
                 {activeTab === 'drc' && <DrcReport design={design} />}
                 {activeTab === 'pinout' && <PinoutTable design={design} onShowToast={showToast} />}

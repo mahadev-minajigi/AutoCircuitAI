@@ -2,7 +2,7 @@ import React from 'react';
 import { Zap, Download, FileJson, FileText, FileCode2 } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import type { CircuitDesign } from '../types/circuit';
-import { generateNetlist } from '../services/aiCircuitEngine';
+import { generateKiCadNetlist, generateEasyEdaJson } from '../services/aiCircuitEngine';
 
 interface HeaderProps {
   currentDesign: CircuitDesign | null;
@@ -33,12 +33,17 @@ const Header: React.FC<HeaderProps> = ({ currentDesign, onShowToast }) => {
       const fwBlob = new Blob([currentDesign.firmwareCode], { type: 'text/plain;charset=utf-8;' });
       saveAs(fwBlob, `${currentDesign.id}-firmware.ino`);
 
-      // Netlist JSON
-      const netlist = generateNetlist(currentDesign);
-      const netlistBlob = new Blob([JSON.stringify(netlist, null, 2)], { type: 'application/json' });
-      saveAs(netlistBlob, `${currentDesign.id}-netlist.json`);
+      // KiCad Netlist .net
+      const kicadNet = generateKiCadNetlist(currentDesign);
+      const kicadBlob = new Blob([kicadNet], { type: 'text/plain;charset=utf-8;' });
+      saveAs(kicadBlob, `${currentDesign.id}-kicad.net`);
 
-      onShowToast('Exported 4 files: Design JSON, BOM CSV, Firmware, Netlist', 'success');
+      // EasyEDA JSON
+      const easyEda = generateEasyEdaJson(currentDesign);
+      const easyEdaBlob = new Blob([JSON.stringify(easyEda, null, 2)], { type: 'application/json' });
+      saveAs(easyEdaBlob, `${currentDesign.id}-EasyEDA.json`);
+
+      onShowToast('Exported complete project bundle: KiCad Netlist, EasyEDA JSON, BOM CSV, Firmware .ino, & Design JSON!', 'success');
     } catch {
       onShowToast('Export failed — check browser download permissions', 'error');
     }
@@ -64,7 +69,8 @@ const Header: React.FC<HeaderProps> = ({ currentDesign, onShowToast }) => {
             <span className="file-badge" title="Design JSON"><FileJson size={13} /> JSON</span>
             <span className="file-badge" title="BOM CSV"><FileText size={13} /> BOM</span>
             <span className="file-badge" title="Firmware .ino"><FileCode2 size={13} /> FW</span>
-            <span className="file-badge" title="Netlist JSON"><FileJson size={13} /> NET</span>
+            <span className="file-badge" title="KiCad Netlist"><FileCode2 size={13} /> KiCad</span>
+            <span className="file-badge" title="EasyEDA JSON"><FileJson size={13} /> EasyEDA</span>
           </div>
         )}
         <button className="btn-primary export-btn" onClick={handleExport} disabled={!currentDesign} title="Export all files (Ctrl+E)">

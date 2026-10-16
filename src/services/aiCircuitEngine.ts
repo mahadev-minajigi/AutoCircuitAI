@@ -175,38 +175,59 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
   return rules;
 }
 
-export function generateNetlist(design: CircuitDesign): object {
-  const netMap = new Map<string, { name: string; protocol: string; connections: { component: string; pin: string }[] }>();
+export function generateKiCadNetlist(design: CircuitDesign): string {
+  const mcu = design.components.find(c => c.category === 'MCU');
+  let netlist = `(export (version D)\n  (design\n    (source "AutoCircuit_AI")\n    (date "${new Date().toUTCString()}")\n    (tool "AutoCircuit AI v1.0")\n  )\n  (components\n`;
 
-  design.pinMappings.forEach(mapping => {
-    const mcu = design.components.find(c => c.category === 'MCU');
-    const comp = design.components.find(c => c.id === mapping.componentId);
-    const netKey = `${mapping.protocol}:${mapping.mcuPin}`;
+  design.components.forEach(comp => {
+    netlist += `    (comp (ref "${comp.id}")\n      (value "${comp.name}")\n      (footprint "${comp.package}")\n      (libsource (lib "AutoCircuit") (part "${comp.category}"))\n    )\n`;
+  });
+  netlist += '  )\n  (nets\n';
 
-    if (!netMap.has(netKey)) {
-      let netName = mapping.protocol === 'Power'
-        ? `${mapping.mcuPin}_POWER`
-        : mapping.protocol === 'GND'
-          ? 'GND'
-          : `${mapping.protocol}_${mapping.mcuPin}`;
-      netMap.set(netKey, {
+  const netMap = new Map<string, { name: string; nodes: { ref: string; pin: string }[] }>();
+
+  design.pinMappings.forEach((mapping) => {
+    const netName = mapping.protocol === 'Power' ? 'VCC' : mapping.protocol === 'GND' ? 'GND' : `Net-${mapping.protocol}_${mapping.mcuPin}`;
+    if (!netMap.has(netName)) {
+      netMap.set(netName, {
         name: netName,
-        protocol: mapping.protocol,
-        connections: [{ component: mcu?.name || 'MCU', pin: mapping.mcuPin }]
+        nodes: [{ ref: mcu?.id || 'MCU1', pin: mapping.mcuPin }]
       });
     }
-
-    netMap.get(netKey)!.connections.push({
-      component: comp?.name || mapping.componentId,
-      pin: mapping.componentPin
-    });
+    netMap.get(netName)!.nodes.push({ ref: mapping.componentId, pin: mapping.componentPin });
   });
 
+  Array.from(netMap.values()).forEach((net, index) => {
+    netlist += `    (net (code ${index + 1}) (name "${net.name}")\n`;
+    net.nodes.forEach(node => {
+      netlist += `      (node (ref "${node.ref}") (pin "${node.pin}"))\n`;
+    });
+    netlist += '    )\n';
+  });
+
+  netlist += '  )\n)\n';
+  return netlist;
+}
+
+export function generateEasyEdaJson(design: CircuitDesign): object {
   return {
-    designId: design.id,
+    docType: 5,
     title: design.title,
-    generatedAt: new Date().toISOString(),
-    nets: [...netMap.values()]
+    generator: "AutoCircuit AI",
+    date: new Date().toISOString(),
+    components: design.components.map(c => ({
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      package: c.package,
+      pins: c.pins
+    })),
+    nets: design.pinMappings.map(p => ({
+      source: `MCU.${p.mcuPin}`,
+      target: `${p.componentId}.${p.componentPin}`,
+      protocol: p.protocol,
+      description: p.description
+    }))
   };
 }
 
