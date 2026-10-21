@@ -125,8 +125,6 @@ function App() {
             </div>
           ) : design ? (
             <>
-              <DesignStats design={design} />
-
               <div className="workspace-heading">
                 <div><span className="workspace-eyebrow">CURRENT DESIGN</span><h1>{design.title}</h1></div>
                 <span className={`design-status ${drcErrorCount ? 'has-errors' : ''}`}><span />{drcErrorCount ? `${drcErrorCount} issues` : drcWarnCount ? `${drcWarnCount} warnings` : 'Ready to review'}</span>
@@ -140,6 +138,8 @@ function App() {
                 </div>
                 {design.warnings.length > 0 && <ul>{design.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
               </section>
+
+              <DesignStats design={design} />
 
               <div className="tabs-header">
                 {([

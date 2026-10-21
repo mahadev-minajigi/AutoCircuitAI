@@ -156,36 +156,32 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.fillStyle = '#94a3b8';
       ctx.fillRect(mcuX - 8, mcuY + mcuHeight / 2 - 8, 8, 16);
 
-      // 2. Filter Primary Hardware Modules (Sensor, Actuator, Display, etc.)
-      // Raw SMD passives (0805 caps, pull-ups) shouldn't clutter the main module placement
-      const primaryModules = design.components.filter(c => 
-        c.id !== mcu?.id && 
-        c.category !== 'Passive' &&
-        !c.name.toLowerCase().includes('capacitor') &&
-        !c.name.toLowerCase().includes('resistor') &&
-        !c.name.toLowerCase().includes('ams1117') // Dev board handles onboard 3.3V LDO
-      );
+      // Place every modeled component, including regulators and passives.
+      const primaryModules = design.components.filter(c => c.id !== mcu?.id);
 
       const compPositions: { id: string; name: string; x: number; y: number; w: number; h: number; isOled: boolean; isSensor: boolean }[] = [];
 
       // Compute slot spacing based on number of primary modules
-      const availableWidth = boardWidth - (mcuWidth + 120);
-      const modSpacing = Math.min(180, availableWidth / Math.max(primaryModules.length, 1));
+      const availableWidth = Math.max(boardWidth - (mcuWidth + 120), 140);
+      const modSpacing = Math.min(160, availableWidth / Math.max(primaryModules.length, 1));
 
       primaryModules.forEach((comp, idx) => {
+        const isPassive = comp.category === 'Passive';
+        const isPower = comp.category === 'Power';
         const isOled = comp.name.toLowerCase().includes('oled') || comp.name.toLowerCase().includes('ssd1306');
         const isSensor = comp.category === 'Sensor' || comp.name.toLowerCase().includes('bme280') || comp.name.toLowerCase().includes('mpu');
         
-        const pw = isOled ? 130 : 100;
-        const ph = isOled ? 95 : 75;
-        const px = startX + 260 + idx * (modSpacing + 20);
-        const py = trenchY - (isOled ? 50 : 38);
+        const pw = isPassive ? 88 : isOled ? 130 : 108;
+        const ph = isPassive ? 54 : isOled ? 95 : 75;
+        const columns = Math.max(1, Math.floor(availableWidth / 150));
+        const px = startX + 235 + (idx % columns) * Math.min(150, modSpacing);
+        const py = startY + 95 + Math.floor(idx / columns) * 105;
 
         compPositions.push({ id: comp.id, name: comp.name, x: px, y: py, w: pw, h: ph, isOled, isSensor });
 
         // Module PCB background
-        ctx.fillStyle = isOled ? '#020617' : '#064e3b';
-        ctx.strokeStyle = isOled ? '#38bdf8' : '#10b981';
+        ctx.fillStyle = isPassive ? '#fff7dc' : isPower ? '#e6f4ef' : isOled ? '#12323a' : '#176d58';
+        ctx.strokeStyle = isPassive ? '#d09a2d' : isPower ? '#22836b' : isOled ? '#53c6d0' : '#31a77c';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.roundRect(px, py, pw, ph, 6);
@@ -193,7 +189,13 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
         ctx.stroke();
 
         // OLED Visual Screen Mockup
-        if (isOled) {
+        if (isPassive) {
+          ctx.fillStyle = '#604a20';
+          ctx.font = 'bold 8px Inter, sans-serif';
+          ctx.fillText(comp.name, px + pw / 2, py + 23, pw - 6);
+          ctx.font = '7px JetBrains Mono, monospace';
+          ctx.fillText(comp.pins.join('  '), px + pw / 2, py + 39);
+        } else if (isOled) {
           ctx.fillStyle = '#17212b';
           ctx.fillRect(px + 10, py + 10, pw - 20, 42);
           ctx.strokeStyle = '#0284c7';
@@ -210,6 +212,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
         }
 
         // Module Label
+        if (!isPassive) {
         ctx.fillStyle = '#f8fafc';
         ctx.font = 'bold 9px Inter, sans-serif';
         ctx.fillText(comp.name, px + pw / 2, py + (isOled ? ph - 16 : 24), pw - 8);
@@ -224,6 +227,36 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
         for (let p = 0; p < pinCount; p++) {
           ctx.fillRect(px + (pw - pinCount * 18) / 2 + p * 18, py + ph - 2, 8, 8);
         }
+        }
+      });
+
+      // Power distribution: connect only rails and source/target pins present in the design data.
+      const powerColor = '#d34545';
+      const groundColor = '#536b8b';
+      const regulated = design.components.find(component => component.category === 'Power' && /ams1117/i.test(component.name));
+      const redRailY = startY + 28;
+      const blueRailY = startY + 54;
+      const drawRailLead = (fromX: number, fromY: number, toY: number, color: string) => {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(fromX, fromY); ctx.quadraticCurveTo(fromX + 15, toY + (fromY < toY ? -10 : 10), fromX + 24, toY); ctx.stroke();
+      };
+      drawRailLead(mcuX + 28, mcuY, redRailY, powerColor);
+      drawRailLead(mcuX + 48, mcuY, blueRailY, groundColor);
+      if (regulated) {
+        const regulatorPos = compPositions.find(component => component.id === regulated.id);
+        if (regulatorPos) {
+          drawRailLead(regulatorPos.x + 20, regulatorPos.y, redRailY, powerColor);
+          drawRailLead(regulatorPos.x + 42, regulatorPos.y, blueRailY, groundColor);
+        }
+      }
+      const powerTargets = design.pinMappings.filter(mapping => mapping.protocol === 'Power' || mapping.protocol === 'GND');
+      powerTargets.forEach(mapping => {
+        const target = compPositions.find(component => component.id === mapping.componentId);
+        if (!target) return;
+        const color = mapping.protocol === 'Power' ? powerColor : groundColor;
+        const railY = mapping.protocol === 'Power' ? redRailY : blueRailY;
+        const x = target.x + target.w / 2;
+        const y = target.y + target.h;
+        ctx.strokeStyle = color; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x, railY); ctx.lineTo(x, y); ctx.stroke();
       });
 
       // Draw signal wires directly from the generated mappings. No board-specific pins are guessed.

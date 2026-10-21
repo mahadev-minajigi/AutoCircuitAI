@@ -17,7 +17,6 @@ import ReactFlow, {
   Controls, 
   MiniMap, 
   Position, 
-  MarkerType,
   Handle
 } from 'reactflow';
 import type { Edge, Node, ReactFlowInstance } from 'reactflow';
@@ -53,6 +52,7 @@ const SchematicIcNode = ({ data }: any) => {
           )}
         </div>
         <span className="ic-category">{category} · {data.package}</span>
+        {data.description && <span className="ic-description">{data.description}</span>}
       </div>
 
       {/* LIVE SIMULATED REAL-WORLD HARDWARE OUTPUTS */}
@@ -104,8 +104,8 @@ const SchematicIcNode = ({ data }: any) => {
           {/* 4. Resistor Live Series Current Limiting */}
           {isResistor && (
             <div className="live-resistor-box">
-              <div className="resistor-symbol">──[ 220Ω ]──</div>
-              <div className="resistor-note">Current drop: ~15mA</div>
+              <div className="resistor-symbol">--[ 4.7kO ]--</div>
+              <div className="resistor-note">I2C pull-up - approximately 0.7mA when LOW</div>
             </div>
           )}
         </div>
@@ -121,6 +121,7 @@ const SchematicIcNode = ({ data }: any) => {
 
           return (
             <div key={pinName} className="ic-pin-row">
+              <Handle type="target" position={Position.Left} id={`pin-${pinName}`} className="schematic-pin-handle" style={{ top: `${82 + index * 25}px` }} />
               <span className={`ic-pin-badge ${isPower ? 'pin-power' : isGnd ? 'pin-gnd' : isClock ? 'pin-clock' : isData ? 'pin-data' : ''} ${isSimulating ? 'pin-active-glow' : ''}`}>
                 <span className="pin-num">{index + 1}</span>
                 <span className="pin-lbl">{pinName}</span>
@@ -131,8 +132,7 @@ const SchematicIcNode = ({ data }: any) => {
       </div>
 
       {/* Handles */}
-      <Handle type="target" position={Position.Left} id="left-in" className="schematic-handle" />
-      <Handle type="source" position={Position.Right} id="right-out" className="schematic-handle" />
+      {pins.map((pinName: string, index: number) => <Handle key={`source-${pinName}`} type="source" position={Position.Right} id={`pin-${pinName}`} className="schematic-pin-handle schematic-pin-source" style={{ top: `${82 + index * 25}px` }} />)}
     </div>
   );
 };
@@ -213,9 +213,10 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
       componentNodes.push({
         id: mcu.id,
         type: 'schematicIc',
-        position: { x: 80, y: Math.max(80, (peripherals.length * 240) / 2 - 120) },
+        position: { x: 80, y: Math.max(120, (peripherals.length * 150) / 2) },
         data: {
           name: mcu.name,
+          description: mcu.description,
           category: mcu.category,
           package: mcu.package,
           pins: mcu.pins,
@@ -232,9 +233,10 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
       componentNodes.push({
         id: comp.id,
         type: 'schematicIc',
-        position: { x: 680, y: 50 + idx * 260 },
+          position: { x: 520 + (idx % 3) * 280, y: 30 + Math.floor(idx / 3) * 210 },
         data: {
           name: comp.name,
+          description: comp.description,
           category: comp.category,
           package: comp.package,
           pins: comp.pins,
@@ -280,19 +282,21 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
               ? '#3b82f6'
               : wireColors[mapping.protocol] || '#00f0ff');
 
+      const sourceId = mapping.sourceComponentId || mcu?.id;
+      const sourceComponent = design.components.find(component => component.id === sourceId);
       const targetComponent = design.components.find(component => component.id === mapping.componentId);
-      if (!mcu || !targetComponent) return;
+      if (!sourceComponent || !targetComponent) return;
 
       schematicEdges.push({
         id: `wire-${idx}-${mapping.componentId}-${mapping.mcuPin}`,
-        source: mcu?.id || '',
+        source: sourceComponent.id,
         target: mapping.componentId,
-        sourceHandle: 'right-out',
-        targetHandle: 'left-in',
+        sourceHandle: `pin-${mapping.mcuPin}`,
+        targetHandle: `pin-${mapping.componentPin}`,
         type: 'smoothstep',
         // Power and ground are static; only signal nets show visual activity.
         animated: isSimulating && !['Power', 'GND'].includes(mapping.protocol),
-        label: `${mapping.mcuPin} ──▶ ${mapping.componentPin} (${mapping.protocol})`,
+        label: `${mapping.mcuPin} → ${mapping.componentPin} · ${mapping.protocol}`,
         labelStyle: { 
           fill: color, 
           fontWeight: 700, 
@@ -308,15 +312,10 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         labelBgPadding: [6, 4],
         style: { 
           stroke: color, 
-          strokeWidth: 2.4,
+          strokeWidth: 2,
           strokeDasharray: undefined
         },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: color,
-          width: 14,
-          height: 14
-        }
+        markerEnd: undefined
       });
     });
 
@@ -344,7 +343,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
   };
 
   const handleResetView = () => {
-    flowRef.current?.fitView({ padding: 0.2, minZoom: 0.45, maxZoom: 1.15 });
+    flowRef.current?.fitView({ padding: 0.12, minZoom: 0.2, maxZoom: 1.2, includeHiddenNodes: true });
   };
 
   return (
@@ -437,8 +436,8 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           edges={edges}
           nodeTypes={nodeTypes}
           fitView
-          fitViewOptions={{ padding: 0.15, minZoom: 0.45, maxZoom: 1.15 }}
-          minZoom={0.3}
+          fitViewOptions={{ padding: 0.12, minZoom: 0.2, maxZoom: 1.2, includeHiddenNodes: true }}
+          minZoom={0.15}
           maxZoom={1.5}
           onInit={instance => { flowRef.current = instance; }}
           attributionPosition="bottom-right"

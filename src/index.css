@@ -259,7 +259,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 620px;
+  min-height: 0;
 }
 
 .schematic-heading,
@@ -320,12 +320,12 @@ body {
 
 .schematic-canvas {
   position: relative;
-  flex: 1 0 480px;
-  min-height: 480px;
+  flex: 1 1 640px;
+  min-height: min(70vh, 640px);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
-  background: #0a0c10;
+  background: #fbfcfd;
 }
 
 .schematic-fullscreen-toggle {
@@ -389,9 +389,7 @@ body {
     padding: 16px;
   }
 
-  .schematic-viewer {
-    min-height: 560px;
-  }
+  .schematic-viewer { min-height: 0; }
 
   .schematic-heading {
     align-items: flex-start;
@@ -403,8 +401,8 @@ body {
   }
 
   .schematic-canvas {
-    flex-basis: 420px;
-    min-height: 420px;
+    flex-basis: 460px;
+    min-height: 460px;
   }
 }
 
@@ -1410,28 +1408,27 @@ body {
 
 /* IC Schematic Component Box */
 .schematic-ic-box {
-  background: #0d1117;
-  border: 2px solid #30363d;
-  border-radius: 6px;
-  padding: 12px 14px;
-  width: 240px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  background: #ffffff;
+  border: 1px solid #cbd5df;
+  border-radius: 10px;
+  padding: 11px 13px;
+  width: 220px;
+  box-shadow: 0 8px 20px rgba(23, 33, 43, 0.1);
   font-family: var(--font-mono);
   position: relative;
 }
 
 .schematic-mcu-box {
-  border-color: #00f0ff;
-  box-shadow: 0 0 25px rgba(0, 240, 255, 0.2);
+  border-color: #087e8b;
+  box-shadow: 0 8px 22px rgba(8, 126, 139, 0.14);
 }
 
 .schematic-peripheral-box {
-  border-color: #3b82f6;
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+  border-color: #9aabb8;
 }
 
 .ic-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid #e5eaf0;
   padding-bottom: 8px;
   margin-bottom: 10px;
 }
@@ -1454,12 +1451,12 @@ body {
 .ic-name {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: #17212b;
 }
 
 .ic-category {
   font-size: 0.65rem;
-  color: #94a3b8;
+  color: #687582;
   text-transform: uppercase;
   margin-top: 2px;
   display: block;
@@ -1470,6 +1467,9 @@ body {
   flex-direction: column;
   gap: 4px;
 }
+.ic-description { display:block; margin-top:5px; color:#687582; font:10px/1.35 var(--font-main); }
+.schematic-pin-handle { width:7px !important; height:7px !important; left:-4px !important; top:50% !important; background:#fff !important; border:1.5px solid #8294a2 !important; }
+.schematic-pin-source { left:auto !important; right:-4px !important; }
 
 .ic-pin-row {
   display: flex;
