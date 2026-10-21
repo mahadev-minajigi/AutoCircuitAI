@@ -318,11 +318,12 @@ void loop() {
         category: 'MCU',
         package: 'UFQFPN-48 Module',
         estimatedCost: 320.00,
-        pins: ['3V3', 'GND', 'PA4', 'PA5', 'PA6', 'PA7', 'PB6', 'PB7'],
+        pins: ['5V', '3V3', 'GND', 'PA4', 'PA5', 'PA6', 'PA7', 'PB6', 'PB7'],
         operatingVoltage: 3.3,
         maxCurrent_mA: 100,
         pinDescriptions: {
           '3V3': '3.3V Output from on-board LDO regulator',
+          '5V': '5V input from USB or regulated 5V BEC output',
           'GND': 'System Ground',
           'PA4': 'SPI1 NSS / Hardware Chip Select Pin',
           'PA5': 'SPI1 SCK (Serial Clock up to 42MHz)',
@@ -366,11 +367,25 @@ void loop() {
           'VOUT': 'Regulated 5.0V output to MCU 5V pin / ESC servo rail',
           'GND': 'Common Ground'
         }
+      },
+      {
+        id: 'c1',
+        name: '100nF IMU decoupling capacitor',
+        description: 'Ceramic bypass capacitor fitted across IMU supply and ground',
+        category: 'Passive',
+        package: '0603 capacitor',
+        estimatedCost: 5,
+        pins: ['1', '2'],
+        operatingVoltage: 3.3
       }
     ],
     pinMappings: [
       { mcuPin: '3V3', componentId: 's1', componentPin: 'VCC', protocol: 'Power', description: 'Clean 3.3V power to IMU sensor', wireColor: '#ef4444' },
+      { mcuPin: '3V3', componentId: 'c1', componentPin: '1', protocol: 'Power', description: 'IMU supply bypass capacitor', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'c1', componentPin: '2', protocol: 'GND', description: 'IMU bypass capacitor ground', wireColor: '#1e293b' },
       { mcuPin: 'GND', componentId: 's1', componentPin: 'GND', protocol: 'GND', description: 'Common ground for sensor & MCU', wireColor: '#1e293b' },
+      { mcuPin: 'VOUT', sourceComponentId: 'p1', componentId: 'u1', componentPin: '5V', protocol: 'Power', description: 'Regulated 5V BEC output to BlackPill 5V input', wireColor: '#ef4444' },
+      { mcuPin: 'GND', sourceComponentId: 'p1', componentId: 'u1', componentPin: 'GND', protocol: 'GND', description: 'BEC common ground to BlackPill', wireColor: '#1e293b' },
       { mcuPin: 'PA4', componentId: 's1', componentPin: 'CS', protocol: 'SPI', description: 'SPI1 Chip Select (CS) - Active Low', wireColor: '#a855f7' },
       { mcuPin: 'PA5', componentId: 's1', componentPin: 'SCLK', protocol: 'SPI', description: 'SPI1 Serial Clock', wireColor: '#eab308' },
       { mcuPin: 'PA6', componentId: 's1', componentPin: 'MISO', protocol: 'SPI', description: 'SPI1 Master In Slave Out', wireColor: '#22c55e' },
@@ -589,4 +604,88 @@ void loop() {
 }`,
     warnings: ['Use a clean 3.3V or 5V rail to prevent audio popping and noise.']
   }
+};
+
+export const motorControllerTemplate: CircuitDesign = {
+  id: 'arduino-l298n-motor',
+  title: 'Arduino Uno PWM Motor Speed Controller',
+  description: 'A potentiometer sets PWM speed on Arduino D9; D7/D8 select direction through an L298N H-bridge. A separate motor supply, four correctly oriented clamp diodes, local bulk capacitors, and a low-side sense shunt are modeled. Verify the L298N module’s onboard diodes and sense resistor before adding external parts.',
+  components: [
+    { id: 'u1', name: 'Arduino Uno R3', description: '5V microcontroller board; D9 PWM, D7/D8 direction, A0 setpoint, A1 current monitor', category: 'MCU', package: 'Dev board', estimatedCost: 600, pins: ['5V', 'GND', 'D9', 'D7', 'D8', 'A0', 'A1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D10', 'D11', 'D12', 'D13', 'A2', 'A3', 'A4', 'A5'], operatingVoltage: 5, maxCurrent_mA: 50 },
+    { id: 'drv1', name: 'L298N Dual H-Bridge Module', description: 'Logic uses 5V; VS motor supply is separate. Remove ENA jumper when using PWM on ENA. Check whether module already includes clamp diodes and sense shunt.', category: 'Actuator', package: 'Module', estimatedCost: 250, pins: ['VSS', 'VS', 'GND', 'ENA', 'IN1', 'IN2', 'OUT1', 'OUT2', 'SENSE_A'], operatingVoltage: 5, maxCurrent_mA: 20 },
+    { id: 'motor1', name: 'Brushed DC Motor', description: 'Single motor driven bidirectionally from L298N OUT1/OUT2; motor voltage and stall current must match supply and driver limits.', category: 'Actuator', package: 'Motor', estimatedCost: 180, pins: ['M+', 'M-'], operatingVoltage: 12, maxCurrent_mA: 1000 },
+    { id: 'pot1', name: '10kΩ Speed Potentiometer', description: 'Ends connect to 5V and GND; wiper sets analog speed command at A0.', category: 'Passive', package: 'Panel potentiometer', estimatedCost: 20, pins: ['5V', 'GND', 'WIPER'], operatingVoltage: 5, maxCurrent_mA: 1 },
+    { id: 'batt1', name: '12V Motor Supply', description: 'Separate fused motor supply sized for motor stall current; share ground with Arduino logic.', category: 'Power', package: 'External supply', estimatedCost: 500, pins: ['+12V', 'GND'], operatingVoltage: 12, maxCurrent_mA: 2000 },
+    { id: 'f1', name: 'Inline Motor Supply Fuse', description: 'Fuse selected for motor stall current, driver rating, wiring, and supply; place in series with +12V input.', category: 'Power', package: 'Inline fuse holder', estimatedCost: 25, pins: ['IN', 'OUT'], operatingVoltage: 12, maxCurrent_mA: 0 },
+    ...['D1 OUT1→VS', 'D2 GND→OUT1', 'D3 OUT2→VS', 'D4 GND→OUT2'].map((name, index) => ({ id: `d${index + 1}`, name: `Fast Clamp Diode ${name}`, description: 'Use a fast-recovery diode (trr ≤200ns) or suitably rated Schottky. Verify module does not already include the clamp bridge. Anode/cathode are shown in pin mappings.', category: 'Passive' as const, package: 'Axial diode', estimatedCost: 12, pins: ['A', 'K'], operatingVoltage: 40, maxCurrent_mA: 1000 })),
+    { id: 'c_motor', name: '470µF Motor Supply Bulk Capacitor', description: 'Across +12V motor supply and common ground near L298N; observe electrolytic polarity and voltage rating.', category: 'Passive', package: 'Radial electrolytic', estimatedCost: 15, pins: ['+', '-'], operatingVoltage: 25, maxCurrent_mA: 0 },
+    { id: 'c_logic', name: '100µF L298N Logic Supply Capacitor', description: 'Across L298N VSS 5V logic rail and ground near module.', category: 'Passive', package: 'Radial electrolytic', estimatedCost: 8, pins: ['+', '-'], operatingVoltage: 10, maxCurrent_mA: 0 },
+    { id: 'c_vs', name: '100nF L298N Motor Rail Bypass', description: 'Ceramic bypass across VS and ground, close to L298N module.', category: 'Passive', package: 'Ceramic capacitor', estimatedCost: 3, pins: ['1', '2'], operatingVoltage: 25, maxCurrent_mA: 0 },
+    { id: 'c_vss', name: '100nF L298N Logic Rail Bypass', description: 'Ceramic bypass across VSS and ground, close to L298N module.', category: 'Passive', package: 'Ceramic capacitor', estimatedCost: 3, pins: ['1', '2'], operatingVoltage: 10, maxCurrent_mA: 0 },
+    { id: 'c_a0', name: '100nF Arduino A0 Input Filter', description: 'Filters potentiometer wiper noise; connect from A0 signal to GND, not across the potentiometer supply.', category: 'Passive', package: 'Ceramic capacitor', estimatedCost: 3, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 0 },
+    { id: 'r_sense', name: '0.1Ω L298N Sense Shunt (2W)', description: 'Low-inductance shunt from SENSE_A to common ground. A1 monitors the shunt voltage; firmware provides a conservative software cutoff, not cycle-by-cycle hardware current regulation. Check module onboard shunt before fitting.', category: 'Passive', package: 'Low-inductance resistor', estimatedCost: 18, pins: ['SENSE', 'GND'], operatingVoltage: 5, maxCurrent_mA: 0 }
+  ],
+  pinMappings: [
+    { mcuPin: 'D9', componentId: 'drv1', componentPin: 'ENA', protocol: 'PWM', description: 'PWM speed command; remove ENA jumper before driving this pin.', wireColor: '#f97316' },
+    { mcuPin: 'D7', componentId: 'drv1', componentPin: 'IN1', protocol: 'GPIO', description: 'Motor direction input 1.', wireColor: '#087e8b' },
+    { mcuPin: 'D8', componentId: 'drv1', componentPin: 'IN2', protocol: 'GPIO', description: 'Motor direction input 2.', wireColor: '#087e8b' },
+    { mcuPin: 'A0', componentId: 'pot1', componentPin: 'WIPER', protocol: 'ADC', description: 'Potentiometer wiper provides analog speed setpoint.', wireColor: '#39866a' },
+    { mcuPin: '5V', componentId: 'pot1', componentPin: '5V', protocol: 'Power', description: 'Potentiometer reference from Arduino 5V.', wireColor: '#d34545' },
+    { mcuPin: 'GND', componentId: 'pot1', componentPin: 'GND', protocol: 'GND', description: 'Potentiometer ground.', wireColor: '#536b8b' },
+    { mcuPin: '5V', componentId: 'drv1', componentPin: 'VSS', protocol: 'Power', description: 'Separate 5V logic supply from Arduino.', wireColor: '#d34545' },
+    { mcuPin: '+12V', sourceComponentId: 'batt1', componentId: 'f1', componentPin: 'IN', protocol: 'Power', description: 'Motor supply passes through an appropriately sized inline fuse.', wireColor: '#d34545' },
+    { mcuPin: 'OUT', sourceComponentId: 'f1', componentId: 'drv1', componentPin: 'VS', protocol: 'Power', description: 'Fused, separate motor supply to L298N VS.', wireColor: '#d34545' },
+    { mcuPin: 'GND', componentId: 'drv1', componentPin: 'GND', protocol: 'GND', description: 'Common ground; join Arduino and motor-supply grounds here.', wireColor: '#536b8b' },
+    { mcuPin: 'GND', sourceComponentId: 'batt1', componentId: 'drv1', componentPin: 'GND', protocol: 'GND', description: 'Motor supply negative joins common ground.', wireColor: '#536b8b' },
+    { mcuPin: 'OUT1', sourceComponentId: 'drv1', componentId: 'motor1', componentPin: 'M+', protocol: 'Power', description: 'H-bridge output 1 to motor terminal.', wireColor: '#087e8b' },
+    { mcuPin: 'OUT2', sourceComponentId: 'drv1', componentId: 'motor1', componentPin: 'M-', protocol: 'Power', description: 'H-bridge output 2 to motor terminal.', wireColor: '#087e8b' },
+    { mcuPin: 'OUT1', sourceComponentId: 'drv1', componentId: 'd1', componentPin: 'A', protocol: 'Power', description: 'Upper clamp: anode at OUT1.', wireColor: '#b45309' },
+    { mcuPin: 'OUT', sourceComponentId: 'f1', componentId: 'd1', componentPin: 'K', protocol: 'Power', description: 'Upper clamp cathode to fused motor supply.', wireColor: '#d34545' },
+    { mcuPin: 'GND', sourceComponentId: 'drv1', componentId: 'd2', componentPin: 'A', protocol: 'GND', description: 'Lower clamp anode to ground.', wireColor: '#536b8b' },
+    { mcuPin: 'OUT1', sourceComponentId: 'drv1', componentId: 'd2', componentPin: 'K', protocol: 'Power', description: 'Lower clamp cathode at OUT1.', wireColor: '#b45309' },
+    { mcuPin: 'OUT2', sourceComponentId: 'drv1', componentId: 'd3', componentPin: 'A', protocol: 'Power', description: 'Upper clamp: anode at OUT2.', wireColor: '#b45309' },
+    { mcuPin: 'OUT', sourceComponentId: 'f1', componentId: 'd3', componentPin: 'K', protocol: 'Power', description: 'Upper clamp cathode to fused motor supply.', wireColor: '#d34545' },
+    { mcuPin: 'GND', sourceComponentId: 'drv1', componentId: 'd4', componentPin: 'A', protocol: 'GND', description: 'Lower clamp anode to ground.', wireColor: '#536b8b' },
+    { mcuPin: 'OUT2', sourceComponentId: 'drv1', componentId: 'd4', componentPin: 'K', protocol: 'Power', description: 'Lower clamp cathode at OUT2.', wireColor: '#b45309' },
+    { mcuPin: 'OUT', sourceComponentId: 'f1', componentId: 'c_motor', componentPin: '+', protocol: 'Power', description: 'Fused motor rail bulk capacitor positive.', wireColor: '#d34545' },
+    { mcuPin: 'GND', sourceComponentId: 'batt1', componentId: 'c_motor', componentPin: '-', protocol: 'GND', description: 'Motor rail bulk capacitor negative.', wireColor: '#536b8b' },
+    { mcuPin: '5V', componentId: 'c_logic', componentPin: '+', protocol: 'Power', description: 'Logic bulk capacitor positive.', wireColor: '#d34545' },
+    { mcuPin: 'GND', componentId: 'c_logic', componentPin: '-', protocol: 'GND', description: 'Logic bulk capacitor negative.', wireColor: '#536b8b' },
+    { mcuPin: 'VS', sourceComponentId: 'drv1', componentId: 'c_vs', componentPin: '1', protocol: 'Power', description: 'VS ceramic bypass positive.', wireColor: '#d34545' },
+    { mcuPin: 'GND', componentId: 'c_vs', componentPin: '2', protocol: 'GND', description: 'VS ceramic bypass ground.', wireColor: '#536b8b' },
+    { mcuPin: 'VSS', sourceComponentId: 'drv1', componentId: 'c_vss', componentPin: '1', protocol: 'Power', description: 'VSS ceramic bypass positive.', wireColor: '#d34545' },
+    { mcuPin: 'GND', componentId: 'c_vss', componentPin: '2', protocol: 'GND', description: 'VSS ceramic bypass ground.', wireColor: '#536b8b' },
+    { mcuPin: 'A0', componentId: 'c_a0', componentPin: '1', protocol: 'ADC', description: 'A0 filter capacitor connects to analog signal.', wireColor: '#39866a' },
+    { mcuPin: 'GND', componentId: 'c_a0', componentPin: '2', protocol: 'GND', description: 'A0 filter capacitor returns to ground.', wireColor: '#536b8b' },
+    { mcuPin: 'SENSE_A', sourceComponentId: 'drv1', componentId: 'r_sense', componentPin: 'SENSE', protocol: 'Power', description: 'L298N sense output to low-side shunt.', wireColor: '#b45309' },
+    { mcuPin: 'GND', componentId: 'r_sense', componentPin: 'GND', protocol: 'GND', description: 'Shunt returns to common ground.', wireColor: '#536b8b' },
+    { mcuPin: 'A1', componentId: 'r_sense', componentPin: 'SENSE', protocol: 'ADC', description: 'Arduino monitors shunt voltage for conservative software overcurrent cutoff.', wireColor: '#39866a' }
+  ],
+  firmwareCode: `const int speedPin = A0;
+const int currentSensePin = A1;
+const int enablePin = 9;  // ENA jumper must be removed
+const int in1Pin = 7;
+const int in2Pin = 8;
+const int currentLimitRaw = 120; // Calibrate for the installed shunt and motor
+
+void setup() {
+  pinMode(enablePin, OUTPUT);
+  pinMode(in1Pin, OUTPUT);
+  pinMode(in2Pin, OUTPUT);
+  digitalWrite(in1Pin, HIGH);
+  digitalWrite(in2Pin, LOW);
+  analogWrite(enablePin, 0);
+}
+
+void loop() {
+  const int setpoint = analogRead(speedPin);
+  const int currentRaw = analogRead(currentSensePin);
+  if (currentRaw >= currentLimitRaw) {
+    analogWrite(enablePin, 0); // software cutoff; not cycle-by-cycle protection
+    return;
+  }
+  const int pwm = map(setpoint, 0, 1023, 0, 255);
+  analogWrite(enablePin, pwm);
+}`,
+  warnings: ['Confirm the motor stall current is within the L298N module rating; the L298 has significant voltage drop and thermal limits.', 'Use a fast-recovery diode bridge (trr ≤200ns) or suitable Schottky diodes; check module-installed diodes before adding duplicates.', 'A1 software monitoring is not fast hardware current limiting. Calibrate the shunt threshold and add a fuse/current-control circuit appropriate to the motor.', 'Keep 12V motor supply separate from 5V logic, with a shared ground. Capacitor proximity and diode current rating require hardware verification.']
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { CircuitDesign } from '../types/circuit';
-import { AlertTriangle, CheckCircle, XCircle, ShieldCheck, Zap, Activity, Check, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ShieldCheck, Zap, Activity, Check } from 'lucide-react';
 
 interface DrcReportProps {
   design: CircuitDesign;
@@ -29,14 +29,17 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
   const i2cPullupStatus: 'PASS' | 'FAIL' = hasI2C ? (hasPullupResistor ? 'PASS' : 'FAIL') : 'PASS';
 
   // 2. Per-IC bypass capacitor connectivity; physical distance is a build constraint.
-  const poweredIcCount = design.components.filter(component => ['MCU', 'Sensor', 'Actuator'].includes(component.category)).length;
+  const poweredIcCount = design.components.filter(component =>
+    ['MCU', 'Sensor', 'Actuator'].includes(component.category) &&
+    !/arduino|dev\s*board|blackpill|pico|devkit|module|breakout|motor/i.test(`${component.name} ${component.package}`)
+  ).length;
   const wiredDecouplingCaps = design.components.filter(component => {
     if (!/100\s*n\s*f|decoupl|bypass/i.test(`${component.name} ${component.description}`)) return false;
     const endpoints = design.pinMappings.filter(mapping => mapping.componentId === component.id);
     return endpoints.some(mapping => mapping.componentPin === '1' && mapping.protocol === 'Power') &&
       endpoints.some(mapping => mapping.componentPin === '2' && mapping.protocol === 'GND');
   }).length;
-  const hasDecouplingCap = poweredIcCount > 0 && wiredDecouplingCaps >= poweredIcCount;
+  const hasDecouplingCap = poweredIcCount === 0 || wiredDecouplingCaps >= poweredIcCount;
   const decouplingStatus: 'PASS' | 'FAIL' = hasDecouplingCap ? 'PASS' : 'FAIL';
 
   // 3. Voltage regulator capacitor presence
@@ -86,12 +89,12 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
 
   // Explicit check fails count
   const explicitFails = [i2cPullupStatus, decouplingStatus, regCapStatus, i2cConflictStatus, logicLevelStatus].filter(s => s === 'FAIL').length;
-  const totalErrors = errors.length + explicitFails;
+  // Detailed rules already report conditions represented by summary checks.
+  // Avoid counting the same finding twice in the headline total.
+  const totalErrors = Math.max(errors.length, explicitFails);
 
   // Overall Readiness
   const isOverallReady = totalErrors === 0;
-  const overallStatus: 'READY' | 'NOT READY' = isOverallReady ? 'READY' : 'NOT READY';
-
   const parseRule = (message: string) => {
     const parts = message.split(' | ');
     return {
@@ -113,8 +116,8 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
         </div>
 
         <div className="drc-counts-box">
-          <div className={`drc-count-badge ${totalErrors > 0 ? 'drc-badge-error' : ''}`}>
-            <XCircle size={18} /> <span>{totalErrors} Errors</span>
+          <div className={`drc-count-badge ${totalErrors > 0 ? 'drc-badge-review' : ''}`}>
+            <AlertTriangle size={18} /> <span>{totalErrors} Need Review</span>
           </div>
           <div className={`drc-count-badge ${warnings.length > 0 ? 'drc-badge-warn' : ''}`}>
             <AlertTriangle size={18} /> <span>{warnings.length} Warnings</span>
@@ -128,7 +131,7 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
       {/* Requirement 4: 5 Explicit Electrical DRC Checks */}
       <div className="drc-summary-grid">
         {/* 1. I2C Pull-Up Resistors */}
-        <div className={`drc-check-card ${i2cPullupStatus === 'PASS' ? 'check-pass' : 'check-fail'}`}>
+        <div className={`drc-check-card ${i2cPullupStatus === 'PASS' ? 'check-pass' : 'check-review'}`}>
           <div className="drc-check-header">
             <Zap size={18} />
             <span className="drc-check-title">I2C Pull-Up Resistors</span>
@@ -137,14 +140,14 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
             {i2cPullupStatus === 'PASS' ? (
               <span className="status-pill status-pass"><Check size={14} /> PASS</span>
             ) : (
-              <span className="status-pill status-fail"><X size={14} /> FAIL</span>
+              <span className="status-pill status-review"><AlertTriangle size={14} /> REVIEW</span>
             )}
           </div>
           <p className="drc-check-desc">4.7kΩ pull-up resistors present on both SDA and SCL open-drain lines.</p>
         </div>
 
         {/* 2. Decoupling Capacitors Proximity */}
-        <div className={`drc-check-card ${decouplingStatus === 'PASS' ? 'check-pass' : 'check-fail'}`}>
+        <div className={`drc-check-card ${decouplingStatus === 'PASS' ? 'check-pass' : 'check-review'}`}>
           <div className="drc-check-header">
             <Activity size={18} />
             <span className="drc-check-title">Decoupling Capacitors</span>
@@ -153,14 +156,14 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
             {decouplingStatus === 'PASS' ? (
               <span className="status-pill status-pass"><Check size={14} /> PASS</span>
             ) : (
-              <span className="status-pill status-fail"><X size={14} /> FAIL</span>
+              <span className="status-pill status-review"><AlertTriangle size={14} /> REVIEW</span>
             )}
           </div>
           <p className="drc-check-desc">A 100nF capacitor is wired across supply and ground for each modeled IC. Place each capacitor within 10mm during assembly.</p>
         </div>
 
         {/* 3. Voltage Regulator Capacitors */}
-        <div className={`drc-check-card ${regCapStatus === 'PASS' ? 'check-pass' : 'check-fail'}`}>
+        <div className={`drc-check-card ${regCapStatus === 'PASS' ? 'check-pass' : 'check-review'}`}>
           <div className="drc-check-header">
             <ShieldCheck size={18} />
             <span className="drc-check-title">Regulator Capacitors</span>
@@ -169,14 +172,14 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
             {regCapStatus === 'PASS' ? (
               <span className="status-pill status-pass"><Check size={14} /> PASS</span>
             ) : (
-              <span className="status-pill status-fail"><X size={14} /> FAIL</span>
+              <span className="status-pill status-review"><AlertTriangle size={14} /> REVIEW</span>
             )}
           </div>
           <p className="drc-check-desc">10µF input and 10µF output bulk capacitors on AMS1117 regulator.</p>
         </div>
 
         {/* 4. I2C Address Conflicts */}
-        <div className={`drc-check-card ${i2cConflictStatus === 'PASS' ? 'check-pass' : 'check-fail'}`}>
+        <div className={`drc-check-card ${i2cConflictStatus === 'PASS' ? 'check-pass' : 'check-review'}`}>
           <div className="drc-check-header">
             <Activity size={18} />
             <span className="drc-check-title">I2C Address Conflicts</span>
@@ -185,14 +188,14 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
             {i2cConflictStatus === 'PASS' ? (
               <span className="status-pill status-pass"><Check size={14} /> PASS</span>
             ) : (
-              <span className="status-pill status-fail"><X size={14} /> FAIL</span>
+              <span className="status-pill status-review"><AlertTriangle size={14} /> REVIEW</span>
             )}
           </div>
           <p className="drc-check-desc">{addressSummary}</p>
         </div>
 
         {/* 5. Logic Level Compatibility */}
-        <div className={`drc-check-card ${logicLevelStatus === 'PASS' ? 'check-pass' : 'check-fail'}`}>
+        <div className={`drc-check-card ${logicLevelStatus === 'PASS' ? 'check-pass' : 'check-review'}`}>
           <div className="drc-check-header">
             <Zap size={18} />
             <span className="drc-check-title">Logic Level (3.3V vs 5V)</span>
@@ -201,29 +204,29 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
             {logicLevelStatus === 'PASS' ? (
               <span className="status-pill status-pass"><Check size={14} /> PASS</span>
             ) : (
-              <span className="status-pill status-fail"><X size={14} /> FAIL</span>
+              <span className="status-pill status-review"><AlertTriangle size={14} /> REVIEW</span>
             )}
           </div>
           <p className="drc-check-desc">Zero 5V over-voltage signals on native 3.3V MCU digital pins.</p>
         </div>
 
         {/* Overall Readiness */}
-        <div className={`drc-check-card drc-overall-card ${overallStatus === 'READY' ? 'overall-ready' : 'overall-not-ready'}`}>
+        <div className={`drc-check-card drc-overall-card ${isOverallReady ? 'overall-ready' : 'overall-review'}`}>
           <div className="drc-check-header">
             <ShieldCheck size={18} />
             <span className="drc-check-title">Overall Status</span>
           </div>
           <div className="drc-check-status">
-            {overallStatus === 'READY' ? (
-              <span className="status-pill status-ready">READY</span>
+            {isOverallReady ? (
+              <span className="status-pill status-ready">NO ISSUES FOUND</span>
             ) : (
-              <span className="status-pill status-not-ready">NOT READY</span>
+              <span className="status-pill status-review">REVIEW DESIGN</span>
             )}
           </div>
           <p className="drc-check-desc">
-            {overallStatus === 'READY' 
-              ? 'Circuit passed essential electrical validation. Ready for prototyping.'
-              : 'Resolve outstanding DRC errors before custom PCB manufacturing or powering on bare silicon.'}
+            {isOverallReady
+              ? 'No issues were detected by the modeled checks. Confirm component datasheets and physical assembly before powering on.'
+              : `${totalErrors} check${totalErrors === 1 ? '' : 's'} need review. Follow the suggested corrections below, then run the checks again.`}
           </p>
           <div style={{ marginTop: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px' }}>
             <strong>Hardware context:</strong> Breakout boards may include pull-ups or decoupling; check each module schematic. Bare ICs need external support parts. This report checks modeled connections and cannot verify onboard components or physical capacitor placement.
@@ -240,10 +243,10 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
           let iconColor = 'var(--accent-emerald)';
 
           if (rule.type === 'Error') {
-            bgColor = 'rgba(255, 51, 102, 0.08)';
-            borderColor = 'var(--accent-rose)';
-            Icon = XCircle;
-            iconColor = 'var(--accent-rose)';
+            bgColor = 'rgba(255, 184, 0, 0.08)';
+            borderColor = 'var(--accent-amber)';
+            Icon = AlertTriangle;
+            iconColor = 'var(--accent-amber)';
           } else if (rule.type === 'Warning') {
             bgColor = 'rgba(255, 184, 0, 0.08)';
             borderColor = 'var(--accent-amber)';
@@ -265,7 +268,7 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
               <Icon color={iconColor} size={20} className="drc-rule-icon" />
               <div className="drc-rule-content">
                 <div className="drc-rule-tag" style={{ color: iconColor }}>
-                  {rule.type.toUpperCase()}
+                  {rule.type === 'Error' ? 'REVIEW' : rule.type.toUpperCase()}
                 </div>
                 <div className="drc-problem-text"><strong>Problem:</strong> {details.problem}</div>
                 <div className="drc-reason-text"><strong>Why it is a problem:</strong> {details.reason}</div>

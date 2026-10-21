@@ -1,5 +1,5 @@
 import type { CircuitDesign, DrcRule } from '../types/circuit';
-import { templates } from '../data/circuitTemplates';
+import { motorControllerTemplate, templates } from '../data/circuitTemplates';
 
 export function runDRC(design: CircuitDesign): DrcRule[] {
   const rules: DrcRule[] = [];
@@ -14,7 +14,8 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
 
   // Voltage compatibility check
   design.components.forEach(comp => {
-    if (comp.id !== mcu.id && comp.operatingVoltage && mcu.operatingVoltage) {
+    const hasLogicSignal = design.pinMappings.some(mapping => mapping.componentId === comp.id && ['GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'I2S'].includes(mapping.protocol));
+    if (comp.id !== mcu.id && hasLogicSignal && comp.operatingVoltage && mcu.operatingVoltage) {
       if (comp.operatingVoltage > mcu.operatingVoltage) {
         rules.push({
           type: 'Warning',
@@ -30,17 +31,24 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
   });
 
   // Structural connectivity validation for generated designs.
+  const invalidMappings: string[] = [];
   design.pinMappings.forEach(mapping => {
     const target = design.components.find(component => component.id === mapping.componentId);
     const source = mapping.sourceComponentId ? design.components.find(component => component.id === mapping.sourceComponentId) : mcu;
     if (!target || !source) {
-      rules.push({ type: 'Error', message: `Invalid connection endpoint | Mapping ${mapping.mcuPin} → ${mapping.componentId}.${mapping.componentPin} references a missing component. | Regenerate the design or correct the mapping.` });
+      invalidMappings.push(`${mapping.mcuPin} → ${mapping.componentId}.${mapping.componentPin} (missing component)`);
       return;
     }
     if (!target.pins.includes(mapping.componentPin) || !source.pins.includes(mapping.mcuPin)) {
-      rules.push({ type: 'Error', message: `Invalid pin mapping | ${source.name}.${mapping.mcuPin} → ${target.name}.${mapping.componentPin} uses a pin not listed on the component. | Verify the exact board and module pinout.` });
+      invalidMappings.push(`${source.name}.${mapping.mcuPin} → ${target.name}.${mapping.componentPin}`);
     }
   });
+  if (invalidMappings.length > 0) {
+    rules.push({
+      type: 'Error',
+      message: `Invalid connections (${invalidMappings.length}) | ${invalidMappings.join('; ')} reference missing components or pins absent from the declared component pinouts. | Correct these mappings using the exact board and module pinouts.`
+    });
+  }
 
   // I2C pull-up and bus checks
   const i2cPins = design.pinMappings.filter(p => p.protocol === 'I2C');
@@ -91,12 +99,18 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
   // Unconnected peripheral pin detection
   design.components.forEach(comp => {
     if (comp.id === mcu.id) return;
+    // Module and breakout pins are often intentionally unused; only report pins
+    // explicitly described as required when they are left unmapped.
     const mappedPins = new Set<string>();
     design.pinMappings.forEach(mapping => {
       if (mapping.componentId === comp.id) mappedPins.add(mapping.componentPin);
       if (mapping.sourceComponentId === comp.id) mappedPins.add(mapping.mcuPin);
     });
-    const unmapped = comp.pins.filter(pin => !mappedPins.has(pin));
+    const requiredPins = comp.pins.filter(pin => {
+      const description = comp.pinDescriptions?.[pin] || '';
+      return /required|must be connected|do not leave floating/i.test(description);
+    });
+    const unmapped = requiredPins.filter(pin => !mappedPins.has(pin));
     if (unmapped.length > 0) {
       rules.push({
         type: 'Warning',
@@ -107,7 +121,7 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
 
   // Decoupling capacitor reminder for high-speed components
   const highSpeedParts = design.components.filter(c =>
-    c.category === 'MCU' || c.name.toLowerCase().includes('mpu') || c.name.toLowerCase().includes('imu') || c.name.toLowerCase().includes('stm32')
+    (c.category === 'MCU' && !/arduino|dev ?board|pico|devkit/i.test(`${c.name} ${c.package}`)) || c.name.toLowerCase().includes('mpu') || c.name.toLowerCase().includes('imu') || c.name.toLowerCase().includes('stm32')
   );
   const hasDecoupling = design.components.some(c =>
     c.name.toLowerCase().includes('capacitor') || c.name.toLowerCase().includes('cap') || c.name.toLowerCase().includes('decoupling')
@@ -120,7 +134,11 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
   }
 
   // Power budget analysis
-  const totalCurrent = design.components.reduce((sum, c) => sum + (c.maxCurrent_mA || 0), 0);
+  // maxCurrent_mA is a component rating, not a measured/estimated load draw.
+  // Sum only loads; exclude MCU capacity and power-supply ratings.
+  const totalCurrent = design.components
+    .filter(component => ['Sensor', 'Actuator'].includes(component.category))
+    .reduce((sum, component) => sum + (component.maxCurrent_mA || 0), 0);
   if (totalCurrent > 500) {
     const hasRegulator = design.components.some(c => c.category === 'Power');
     if (!hasRegulator) {
@@ -251,6 +269,13 @@ export function generateEasyEdaJson(design: CircuitDesign): object {
 }
 
 export function generateCircuitLocal(prompt: string, preset?: string): CircuitDesign {
+  if (!preset && /motor/i.test(prompt) && /l298n|arduino\s*uno/i.test(prompt)) {
+    const design = { ...motorControllerTemplate, components: motorControllerTemplate.components.map(component => ({ ...component, pins: [...component.pins] })), pinMappings: motorControllerTemplate.pinMappings.map(mapping => ({ ...mapping })) };
+    design.id = `motor-${Math.random().toString(36).slice(2, 9)}`;
+    design.description = `${motorControllerTemplate.description} Requested project: ${prompt}`;
+    design.drcReport = runDRC(design);
+    return design;
+  }
   if (preset && templates[preset]) {
     const design = { ...templates[preset] };
     design.drcReport = runDRC(design);
@@ -302,6 +327,12 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
 }
 
 export async function generateCircuit(prompt: string, preset?: string): Promise<CircuitDesign> {
+  if (!preset && /motor/i.test(prompt) && /l298n|arduino\s*uno/i.test(prompt)) {
+    return generateCircuitLocal(prompt);
+  }
+  if (!preset && /flight\s*controller|drone/i.test(prompt)) {
+    return generateCircuitLocal(prompt);
+  }
   try {
     const response = await fetch('/api/generate', {
       method: 'POST',
@@ -329,9 +360,10 @@ export async function generateCircuit(prompt: string, preset?: string): Promise<
         return mapping;
       });
 
-      if (!data.drcReport || data.drcReport.length === 0) {
-        data.drcReport = runDRC(data);
-      }
+      // Always evaluate with the current client rules. API responses can carry
+      // a cached report produced by an older deployment, which kept obsolete
+      // duplicate warnings/errors visible after the rule fixes.
+      data.drcReport = runDRC(data);
       return data;
     }
   } catch {

@@ -1,6 +1,7 @@
 ﻿import os
 import json
 import uuid
+import re
 from typing import List, Optional, Literal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +36,7 @@ class Component(BaseModel):
     pins: List[str]
     operatingVoltage: Optional[float] = None
     maxCurrent_mA: Optional[float] = None
+    pinDescriptions: Optional[dict[str, str]] = None
 
 class PinMapping(BaseModel):
     mcuPin: str
@@ -82,7 +84,11 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
 
     # Voltage check
     for comp in design.components:
-        if comp.id != mcu.id and comp.operatingVoltage and mcu.operatingVoltage:
+        has_logic_signal = any(
+            mapping.componentId == comp.id and mapping.protocol in {'GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'I2S'}
+            for mapping in design.pinMappings
+        )
+        if comp.id != mcu.id and has_logic_signal and comp.operatingVoltage and mcu.operatingVoltage:
             if comp.operatingVoltage > mcu.operatingVoltage:
                 rules.append(DrcRule(
                     type="Warning",
@@ -96,13 +102,19 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
 
     # Validate every generated connection endpoint before presenting a schematic.
     component_by_id = {component.id: component for component in design.components}
+    invalid_mappings = []
     for mapping in design.pinMappings:
         source = component_by_id.get(mapping.sourceComponentId) if mapping.sourceComponentId else mcu
         target = component_by_id.get(mapping.componentId)
         if not source or not target:
-            rules.append(DrcRule(type="Error", message=f"Invalid connection endpoint | {mapping.mcuPin} to {mapping.componentId}.{mapping.componentPin} references a missing component. | Regenerate or correct the mapping."))
+            invalid_mappings.append(f"{mapping.mcuPin} to {mapping.componentId}.{mapping.componentPin} (missing component)")
         elif mapping.mcuPin not in source.pins or mapping.componentPin not in target.pins:
-            rules.append(DrcRule(type="Error", message=f"Invalid pin mapping | {source.name}.{mapping.mcuPin} to {target.name}.{mapping.componentPin} uses an undefined pin. | Confirm the exact board and module pinout."))
+            invalid_mappings.append(f"{source.name}.{mapping.mcuPin} to {target.name}.{mapping.componentPin}")
+    if invalid_mappings:
+        rules.append(DrcRule(
+            type="Error",
+            message=f"Invalid connections ({len(invalid_mappings)}) | {'; '.join(invalid_mappings)} refer to missing components or pins absent from the declared component pinouts. | Correct these mappings using the exact board and module pinouts."
+        ))
 
     # I2C pull-up and bus check
     i2c_pins = [p for p in design.pinMappings if p.protocol == 'I2C']
@@ -122,7 +134,16 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
             continue
         mapped_pins = {m.componentPin for m in design.pinMappings if m.componentId == comp.id}
         mapped_pins.update(m.mcuPin for m in design.pinMappings if m.sourceComponentId == comp.id)
-        unmapped = [p for p in comp.pins if p not in mapped_pins]
+        # Module pins not used by this design are usually optional. Only flag
+        # pins whose metadata explicitly says they must be connected.
+        unmapped = [
+            p for p in comp.pins
+            if p not in mapped_pins and re.search(
+                r"required|must be connected|do not leave floating",
+                (comp.pinDescriptions or {}).get(p, ""),
+                re.IGNORECASE,
+            )
+        ]
         if unmapped:
             rules.append(DrcRule(
                 type="Warning",
@@ -130,7 +151,11 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
             ))
 
     # Power budget analysis
-    total_current = sum(c.maxCurrent_mA or 0 for c in design.components)
+    # maxCurrent_mA is a device rating, not its expected operating load.
+    total_current = sum(
+        c.maxCurrent_mA or 0 for c in design.components
+        if c.category in {'Sensor', 'Actuator'}
+    )
     if total_current > 500:
         has_regulator = any(c.category == 'Power' for c in design.components)
         if not has_regulator:
@@ -425,7 +450,11 @@ def ensure_design_support_parts(design: CircuitDesign) -> None:
             add_mapping(power_pin, existing.id, '1', 'Power', f"{line} pull-up to logic supply")
             add_mapping(bus_pin, existing.id, '2', 'I2C', f"{line} pull-up branch to shared bus")
 
-    powered_ics = [component for component in design.components if component.category in {'MCU', 'Sensor', 'Actuator'}]
+    powered_ics = [
+        component for component in design.components
+        if component.category in {'MCU', 'Sensor', 'Actuator'}
+        and not re.search(r"dev\s*board|blackpill|pico|devkit|module|breakout", f"{component.name} {component.package}", re.IGNORECASE)
+    ]
     for ic in powered_ics:
         marker = ic.name.lower().split()[0]
         cap = next((component for component in design.components if component.category == 'Passive' and ('100nf' in (component.name + ' ' + component.description).lower() or 'decoupl' in (component.name + ' ' + component.description).lower()) and marker in (component.name + ' ' + component.description).lower()), None)
