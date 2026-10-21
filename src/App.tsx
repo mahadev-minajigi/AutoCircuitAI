@@ -10,7 +10,6 @@ import DrcReport from './components/DrcReport';
 import LabGuideView from './components/LabGuideView';
 import BreadboardVisualizer from './components/BreadboardVisualizer';
 import DesignHistory, { type HistoryEntry } from './components/DesignHistory';
-import DesignStats from './components/DesignStats';
 import Toast, { type ToastMessage } from './components/Toast';
 import { Cpu, List, FileCode2, CircuitBoard, LayoutDashboard, ShieldCheck, BookOpen, Layers } from 'lucide-react';
 import { generateCircuit } from './services/aiCircuitEngine';
@@ -86,6 +85,16 @@ function App() {
   const drcErrorCount = design?.drcReport?.filter(r => r.type === 'Error').length ?? 0;
   const drcWarnCount = design?.drcReport?.filter(r => r.type === 'Warning').length ?? 0;
 
+  const explainedComponents = design?.components.filter(component => component.category !== 'MCU') ?? [];
+  const signalMappings = design?.pinMappings.filter(mapping => !['Power', 'GND'].includes(mapping.protocol)) ?? [];
+  const signalFlow = signalMappings.slice(0, 6).map(mapping => {
+    const source = mapping.sourceComponentId
+      ? design?.components.find(component => component.id === mapping.sourceComponentId)?.name
+      : design?.components.find(component => component.category === 'MCU')?.name;
+    const target = design?.components.find(component => component.id === mapping.componentId)?.name;
+    return `${source ?? 'Controller'} ${mapping.mcuPin} → ${target ?? mapping.componentId} ${mapping.componentPin} (${mapping.protocol})`;
+  });
+
   return (
     <div className="app-container">
       <Header currentDesign={design} onShowToast={showToast} />
@@ -130,16 +139,33 @@ function App() {
                 <span className={`design-status ${drcErrorCount ? 'has-errors' : ''}`}><span />{drcErrorCount ? `${drcErrorCount} issues` : drcWarnCount ? `${drcWarnCount} warnings` : 'Ready to review'}</span>
               </div>
               <section className="project-explainer" aria-label="Project explanation">
-                <div><span className="workspace-eyebrow">PROJECT OVERVIEW</span><p>{design.description}</p></div>
-                <div className="project-explainer-details">
-                  <span><strong>{design.components.length}</strong> components</span>
-                  <span><strong>{design.pinMappings.length}</strong> mapped connections</span>
-                  <span><strong>{design.warnings.length}</strong> design notes</span>
+                <div className="project-explainer-intro">
+                  <span className="workspace-eyebrow">PROJECT EXPLANATION</span>
+                  <p>{design.description}</p>
                 </div>
+                <div className="project-explainer-section">
+                  <h2>How the circuit works</h2>
+                  <p>The {design.components.find(component => component.category === 'MCU')?.name ?? 'main controller'} runs the project firmware. The connections in the diagram show how it communicates with and controls the other listed parts. Power and ground links provide the supply and shared electrical reference shown in the design.</p>
+                </div>
+                {explainedComponents.length > 0 && (
+                  <div className="project-explainer-section">
+                    <h2>Component roles</h2>
+                    <ul className="project-component-list">
+                      {explainedComponents.map(component => (
+                        <li key={component.id}><strong>{component.name}:</strong> {component.description}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {signalFlow.length > 0 && (
+                  <div className="project-explainer-section">
+                    <h2>Signal flow</h2>
+                    <ul className="project-flow-list">{signalFlow.map(flow => <li key={flow}>{flow}</li>)}</ul>
+                    {signalMappings.length > signalFlow.length && <p className="project-flow-more">The circuit diagram shows the remaining connections.</p>}
+                  </div>
+                )}
                 {design.warnings.length > 0 && <ul>{design.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
               </section>
-
-              <DesignStats design={design} />
 
               <div className="tabs-header">
                 {([
