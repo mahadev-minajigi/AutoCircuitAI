@@ -173,6 +173,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
   const [ledState, setLedState] = useState(true);
   const [sensorTemp, setSensorTemp] = useState(25.4);
   const [showHandWiring, setShowHandWiring] = useState(false);
+  const hasLed = design.components.some(component => /\bled\b/i.test(component.name));
 
   // Live simulation tick: LED blinking, sensor data streaming
   useEffect(() => {
@@ -180,14 +181,14 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
 
     const interval = setInterval(() => {
       setLedState(prev => !prev);
-      setSensorTemp(prev => {
+      if (design.components.some(component => component.category === 'Sensor' && /bme|dht|bmp/i.test(component.name))) setSensorTemp(prev => {
         const delta = (Math.random() - 0.5) * 0.4;
         return parseFloat((prev + delta).toFixed(1));
       });
     }, 1200);
 
     return () => clearInterval(interval);
-  }, [isSimulating]);
+  }, [isSimulating, design.components]);
 
   const { nodes, edges, netCount } = useMemo(() => {
     const mcu = design.components.find(c => c.category === 'MCU');
@@ -220,7 +221,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           pins: mcu.pins,
           isMCU: true,
           isSimulating,
-          ledState,
+          ledState: hasLed && ledState,
           sensorTemp
         }
       });
@@ -239,7 +240,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           pins: comp.pins,
           isMCU: false,
           isSimulating,
-          ledState,
+          ledState: hasLed && ledState,
           sensorTemp
         }
       });
@@ -269,7 +270,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
       const netKey = `${mapping.protocol}:${mapping.mcuPin}:${mapping.componentPin}`;
       netCountSet.add(netKey);
 
-      const color = mapping.protocol === 'Power' 
+      const color = mapping.wireColor || (mapping.protocol === 'Power' 
         ? '#ef4444' 
         : mapping.protocol === 'GND' 
           ? '#64748b' 
@@ -277,7 +278,10 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
             ? '#eab308'
             : mapping.protocol === 'I2C'
               ? '#3b82f6'
-              : wireColors[mapping.protocol] || '#00f0ff';
+              : wireColors[mapping.protocol] || '#00f0ff');
+
+      const targetComponent = design.components.find(component => component.id === mapping.componentId);
+      if (!mcu || !targetComponent) return;
 
       schematicEdges.push({
         id: `wire-${idx}-${mapping.componentId}-${mapping.mcuPin}`,
@@ -286,8 +290,8 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         sourceHandle: 'right-out',
         targetHandle: 'left-in',
         type: 'smoothstep',
-        // Animated current flow during live simulation!
-        animated: isSimulating,
+        // Power and ground are static; only signal nets show visual activity.
+        animated: isSimulating && !['Power', 'GND'].includes(mapping.protocol),
         label: `${mapping.mcuPin} ──▶ ${mapping.componentPin} (${mapping.protocol})`,
         labelStyle: { 
           fill: color, 
@@ -296,7 +300,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           fontFamily: 'JetBrains Mono, monospace'
         },
         labelBgStyle: { 
-          fill: '#0f131a', 
+          fill: '#ffffff', 
           fillOpacity: 0.95,
           rx: 4,
           ry: 4
@@ -304,8 +308,8 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         labelBgPadding: [6, 4],
         style: { 
           stroke: color, 
-          strokeWidth: isSimulating ? 2.8 : 2,
-          strokeDasharray: isSimulating ? '6,3' : undefined
+          strokeWidth: 2.4,
+          strokeDasharray: undefined
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -349,10 +353,10 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
       <div className="schematic-heading">
         <div>
           <h2>
-            Interactive Live Circuit Diagram & Physical Simulator
+            3D circuit overview
             {isSimulating && <span className="live-simulation-tag"><Activity size={14} /> LIVE RUNNING</span>}
           </h2>
-          <p>{design.title} — Real-time interactive electrical schematic with animated current flow, LED output, and breadboard connections.</p>
+          <p>Rotate, zoom, and inspect the generated connections. Signal animation is a visual simulation, not a hardware measurement.</p>
         </div>
         <div className="schematic-counts">
           <span className="badge badge-cyan">{design.components.length} IC Packages</span>
@@ -369,7 +373,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
             title="Toggle Live Circuit Power"
           >
             {isSimulating ? <Square size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-            {isSimulating ? 'Power ON (Simulating)' : 'Power OFF (Paused)'}
+            {isSimulating ? 'Simulation running' : 'Simulation paused'}
           </button>
 
           <button 
@@ -385,10 +389,10 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         <div className="sim-live-metrics">
           <div className="sim-metric-pill">
             <span className="metric-dot-live" style={{ background: isSimulating ? (ledState ? '#00ff88' : '#eab308') : '#64748b' }} />
-            <span>LED Signal: <strong>{isSimulating ? (ledState ? 'HIGH (3.3V)' : 'LOW (0V)') : 'OFF'}</strong></span>
+            <span>Visual signal: <strong>{isSimulating ? 'Active' : 'Paused'}</strong></span>
           </div>
           <div className="sim-metric-pill">
-            <span>Bus Clock: <strong>{isSimulating ? '400 kHz' : 'STOPPED'}</strong></span>
+            <span>Mapped nets: <strong>{netCount}</strong></span>
           </div>
         </div>
       </div>
@@ -440,11 +444,11 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           attributionPosition="bottom-right"
         >
           {/* Engineering Dot Matrix / Grid Background */}
-          <Background color="rgba(0, 240, 255, 0.08)" gap={24} size={1.5} />
+          <Background color="rgba(8, 126, 139, 0.12)" gap={24} size={1.5} />
           <Controls style={{ background: 'var(--bg-panel)', fill: 'var(--text-main)', border: '1px solid var(--border-color)' }} />
           <MiniMap 
-            nodeColor={(n) => n.data?.isMCU ? '#00f0ff' : '#3b82f6'}
-            maskColor="rgba(0, 0, 0, 0.75)"
+            nodeColor={(n) => n.data?.isMCU ? '#087e8b' : '#6b9ca2'}
+            maskColor="rgba(23, 33, 43, 0.12)"
             style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)' }}
           />
         </ReactFlow>

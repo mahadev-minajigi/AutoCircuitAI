@@ -1,13 +1,13 @@
 :root {
-  --bg-dark: #0f1115;
-  --bg-panel: #161a22;
-  --bg-panel-glass: rgba(22, 26, 34, 0.7);
-  --border-color: #2b303b;
-  --text-main: #e2e8f0;
-  --text-muted: #8b949e;
+  --bg-dark: #f4f6f8;
+  --bg-panel: #ffffff;
+  --bg-panel-glass: #ffffff;
+  --border-color: #e2e7ed;
+  --text-main: #17212b;
+  --text-muted: #687582;
 
-  --accent-cyan: #00f0ff;
-  --accent-cyan-dim: rgba(0, 240, 255, 0.15);
+  --accent-cyan: #087e8b;
+  --accent-cyan-dim: rgba(8, 126, 139, 0.1);
 
   --accent-emerald: #00ff88;
   --accent-amber: #ffb800;
@@ -29,11 +29,7 @@ body {
   font-family: var(--font-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-image:
-    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
-  background-size: 30px 30px;
-  background-position: center center;
+  background-image: none;
   min-height: 100vh;
   overflow-x: hidden;
 }
@@ -48,8 +44,8 @@ body {
 }
 
 .btn-primary {
-  background: var(--accent-cyan-dim);
-  color: var(--accent-cyan);
+  background: var(--accent-cyan);
+  color: #fff;
   border: 1px solid var(--accent-cyan);
   padding: 8px 16px;
   border-radius: 6px;
@@ -59,15 +55,15 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  text-transform: none;
+  letter-spacing: 0;
   font-size: 0.85rem;
 }
 
 .btn-primary:hover {
-  background: var(--accent-cyan);
-  color: #000;
-  box-shadow: 0 0 15px var(--accent-cyan-dim);
+  background: #066a75;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(8, 126, 139, 0.16);
 }
 
 .btn-secondary {
@@ -104,6 +100,7 @@ body {
   padding: 0 24px;
   justify-content: space-between;
   background: var(--bg-panel);
+  box-shadow: 0 1px 2px rgba(23, 33, 43, 0.03);
 }
 
 .main-content {
@@ -113,13 +110,12 @@ body {
 }
 
 .sidebar {
-  flex: 0 0 380px;
-  width: 380px;
+  flex: 0 0 340px;
+  width: 340px;
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  background: var(--bg-panel-glass);
-  backdrop-filter: blur(10px);
+  background: var(--bg-panel);
 }
 
 .workspace {
@@ -127,8 +123,30 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: transparent;
+  background: var(--bg-dark);
 }
+
+.prompt-studio { padding: 24px 20px; display: flex; flex-direction: column; gap: 26px; }
+.prompt-section-heading, .quick-start-heading { display:flex; align-items:center; justify-content:space-between; color:var(--accent-cyan); margin-bottom:14px; }
+.prompt-section-heading h2, .quick-start-heading h3 { color:var(--text-main); font-size:1.05rem; margin-top:4px; }
+.workspace-eyebrow { color:var(--text-muted); font-size:.68rem; font-weight:700; letter-spacing:.09em; }
+.textarea-glass { min-height:138px; resize:vertical; background:#fbfcfd; line-height:1.55; font-size:.9rem; }
+.prompt-suggestions { gap:7px; }
+.suggestion-chip { color:var(--text-muted); border-color:var(--border-color); background:#fff; }
+.suggestion-chip:hover { color:var(--accent-cyan); background:#f0f8f8; }
+.preset-card { background:#fff; padding:13px; }
+.preset-card:hover { border-color:var(--accent-cyan); background:#f6fbfb; }
+.design-status { display:inline-flex; align-items:center; gap:8px; color:var(--text-muted); font-size:.8rem; background:#fff; padding:7px 10px; border:1px solid var(--border-color); border-radius:999px; white-space:nowrap; }
+.design-status span { width:8px; height:8px; border-radius:50%; background:#28a879; }
+.design-status.has-errors span { background:#dc5252; }
+.workspace-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 24px 12px; }
+.workspace-heading h1 { margin-top:4px; font-size:1.28rem; line-height:1.3; }
+.project-explainer { margin:0 24px 14px; padding:16px 18px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px 20px; background:#fff; border:1px solid var(--border-color); border-radius:10px; }
+.project-explainer p { margin-top:5px; color:var(--text-main); font-size:.9rem; line-height:1.55; }
+.project-explainer-details { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.project-explainer-details span { padding:7px 9px; border:1px solid var(--border-color); border-radius:7px; color:var(--text-muted); font-size:.75rem; white-space:nowrap; }
+.project-explainer-details strong { color:var(--text-main); }
+.project-explainer ul { grid-column:1 / -1; padding-left:18px; color:#8a5b13; font-size:.8rem; line-height:1.5; }
 
 .project-summary-box {
   margin: 20px 24px 0;
@@ -199,18 +217,19 @@ body {
   flex: 0 0 auto;
   overflow-x: auto;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-panel);
-  padding: 0 16px;
+  background: transparent;
+  padding: 0 24px;
+  gap: 4px;
 }
 
 .tab-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  padding: 12px 20px;
+  padding: 11px 13px;
   cursor: pointer;
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   border-bottom: 2px solid transparent;
   transition: all 0.2s ease;
   display: flex;
@@ -225,13 +244,14 @@ body {
 .tab-btn.active {
   color: var(--accent-cyan);
   border-bottom-color: var(--accent-cyan);
+  background: #fff;
 }
 
 .tab-content {
   flex: 1;
   overflow: auto;
   position: relative;
-  padding: 24px;
+  padding: 20px 24px 28px;
   min-height: 0;
 }
 
@@ -354,17 +374,16 @@ body {
     border-bottom: 1px solid var(--border-color);
   }
 
+  .prompt-studio { padding:20px 16px; }
+
   .workspace {
     width: 100%;
   }
 
-  .project-summary-box {
-    margin: 16px 16px 0;
-  }
-
-  .workflow-indicator {
-    padding: 12px 16px 0;
-  }
+  .workspace-heading { padding:16px; align-items:flex-start; flex-direction:column; }
+  .project-explainer { margin:0 16px 12px; grid-template-columns:1fr; }
+  .tabs-header { padding:0 12px; }
+  .tab-btn { padding:10px 11px; }
 
   .tab-content {
     padding: 16px;
@@ -420,7 +439,7 @@ body {
 .textarea-glass:focus {
   outline: none;
   border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 1px var(--accent-cyan-dim);
+  box-shadow: 0 0 0 3px var(--accent-cyan-dim);
 }
 
 .project-description-box {

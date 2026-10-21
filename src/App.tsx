@@ -18,17 +18,7 @@ import type { CircuitDesign } from './types/circuit';
 
 type TabId = 'schematic' | 'breadboard' | 'lab' | 'pinout' | 'bom' | 'code' | 'pcb' | 'drc';
 
-const workflowSteps = [
-  'User Prompt',
-  'Requirement Analysis',
-  'Component Selection',
-  'Circuit Generation',
-  'Pin Mapping',
-  'DRC Validation',
-  'BOM',
-  'Firmware',
-  'PCB Preview'
-];
+const workflowSteps = ['Prompt', 'Analysis', 'Components', 'Circuit', 'Pin mapping', 'Validation', 'BOM', 'Firmware', 'PCB'];
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabId>('schematic');
@@ -135,36 +125,32 @@ function App() {
             </div>
           ) : design ? (
             <>
-              <div className="project-summary-box">
-                <div className="project-summary-tag">AI-assisted hardware design and circuit generation</div>
-                <p>
-                  Current prototype: understands supported hardware requirements, selects compatible components,
-                  generates circuit connections, creates pin mapping, builds a BOM, produces starter firmware,
-                  performs rule-based electrical validation, and provides a PCB preview.
-                </p>
-              </div>
-
               <DesignStats design={design} />
 
-              <div className="workflow-indicator" aria-label="Design workflow">
-                {workflowSteps.map((step, index) => (
-                  <div key={step} className={`workflow-step ${index === workflowSteps.length - 1 ? 'last' : ''}`}>
-                    <span className="workflow-number">{index + 1}</span>
-                    <span>{step}</span>
-                  </div>
-                ))}
+              <div className="workspace-heading">
+                <div><span className="workspace-eyebrow">CURRENT DESIGN</span><h1>{design.title}</h1></div>
+                <span className={`design-status ${drcErrorCount ? 'has-errors' : ''}`}><span />{drcErrorCount ? `${drcErrorCount} issues` : drcWarnCount ? `${drcWarnCount} warnings` : 'Ready to review'}</span>
               </div>
+              <section className="project-explainer" aria-label="Project explanation">
+                <div><span className="workspace-eyebrow">PROJECT OVERVIEW</span><p>{design.description}</p></div>
+                <div className="project-explainer-details">
+                  <span><strong>{design.components.length}</strong> components</span>
+                  <span><strong>{design.pinMappings.length}</strong> mapped connections</span>
+                  <span><strong>{design.warnings.length}</strong> design notes</span>
+                </div>
+                {design.warnings.length > 0 && <ul>{design.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
+              </section>
 
               <div className="tabs-header">
                 {([
-                  { id: 'schematic' as TabId, icon: LayoutDashboard, label: 'Schematic', badge: null as 'error' | 'warn' | null },
-                  { id: 'breadboard' as TabId, icon: Layers, label: 'Breadboard View', badge: null as 'error' | 'warn' | null },
-                  { id: 'lab' as TabId, icon: BookOpen, label: 'Practical Lab Guide', badge: null as 'error' | 'warn' | null },
-                  { id: 'drc' as TabId, icon: ShieldCheck, label: 'DRC Report', badge: (drcErrorCount > 0 ? 'error' : drcWarnCount > 0 ? 'warn' : null) as 'error' | 'warn' | null },
-                  { id: 'pinout' as TabId, icon: Cpu, label: 'Pin Mapping', badge: null as 'error' | 'warn' | null },
+                  { id: 'schematic' as TabId, icon: LayoutDashboard, label: '3D Circuit', badge: null as 'error' | 'warn' | null },
+                  { id: 'breadboard' as TabId, icon: Layers, label: 'Breadboard', badge: null as 'error' | 'warn' | null },
+                  { id: 'lab' as TabId, icon: BookOpen, label: 'Lab guide', badge: null as 'error' | 'warn' | null },
+                  { id: 'drc' as TabId, icon: ShieldCheck, label: 'Checks', badge: (drcErrorCount > 0 ? 'error' : drcWarnCount > 0 ? 'warn' : null) as 'error' | 'warn' | null },
+                  { id: 'pinout' as TabId, icon: Cpu, label: 'Pin mapping', badge: null as 'error' | 'warn' | null },
                   { id: 'bom' as TabId, icon: List, label: 'BOM', badge: null as 'error' | 'warn' | null },
                   { id: 'code' as TabId, icon: FileCode2, label: 'Firmware', badge: null as 'error' | 'warn' | null },
-                  { id: 'pcb' as TabId, icon: CircuitBoard, label: 'PCB Preview', badge: null as 'error' | 'warn' | null },
+                  { id: 'pcb' as TabId, icon: CircuitBoard, label: 'PCB', badge: null as 'error' | 'warn' | null },
                 ]).map(({ id, icon: Icon, label, badge }) => (
                   <button
                     key={id}

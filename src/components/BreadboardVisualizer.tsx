@@ -26,7 +26,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // Dark background
-      ctx.fillStyle = '#0a0d14';
+      ctx.fillStyle = '#f4f6f8';
       ctx.fillRect(0, 0, width, height);
 
       // Breadboard dimensions
@@ -87,7 +87,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       // Breadboard Pin Holes (Tie points)
       const numCols = 30;
       const colSpacing = (boardWidth - 80) / numCols;
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = '#17212b';
 
       // Top power holes
       for (let c = 0; c < numCols; c++) {
@@ -132,7 +132,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       const mcuWidth = 140;
       const mcuHeight = 90;
 
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = '#17212b';
       ctx.strokeStyle = '#00f0ff';
       ctx.lineWidth = 2;
       ctx.shadowColor = 'rgba(0, 240, 255, 0.3)';
@@ -144,7 +144,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.shadowBlur = 0;
 
       // MCU Chip Label
-      ctx.fillStyle = '#38bdf8';
+      ctx.fillStyle = '#8ee5e9';
       ctx.font = 'bold 11px Inter, sans-serif';
       ctx.fillText(mcu?.name || 'ESP32 / MCU', mcuX + mcuWidth / 2, mcuY + 36);
 
@@ -194,13 +194,13 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
 
         // OLED Visual Screen Mockup
         if (isOled) {
-          ctx.fillStyle = '#0f172a';
+          ctx.fillStyle = '#17212b';
           ctx.fillRect(px + 10, py + 10, pw - 20, 42);
           ctx.strokeStyle = '#0284c7';
           ctx.strokeRect(px + 10, py + 10, pw - 20, 42);
 
           // Simulated OLED display pixels
-          ctx.fillStyle = '#38bdf8';
+          ctx.fillStyle = '#8ee5e9';
           ctx.font = 'bold 8px JetBrains Mono, monospace';
           ctx.fillText('AUTO-CIRCUIT', px + pw / 2, py + 24);
           ctx.font = '7px JetBrains Mono, monospace';
@@ -226,123 +226,32 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
         }
       });
 
-      // 3. LED Circuit & Series Resistor (Only rendered if an actual LED is part of the circuit)
-      const ledComponent = design.components.find(c => c.name.toLowerCase().includes('led'));
-      if (ledComponent) {
-        const resX = startX + 220;
-        const resY = startY + 110;
-        // Resistor body
-        ctx.fillStyle = '#fef08a';
-        ctx.strokeStyle = '#ca8a04';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(resX, resY - 6, 36, 12, 3);
-        ctx.fill();
-        ctx.stroke();
-
-        // Color bands (220Ω: Red, Red, Brown, Gold)
-        ctx.fillStyle = '#ef4444'; ctx.fillRect(resX + 6, resY - 6, 3, 12);
-        ctx.fillRect(resX + 13, resY - 6, 3, 12);
-        ctx.fillStyle = '#78350f'; ctx.fillRect(resX + 20, resY - 6, 3, 12);
-        ctx.fillStyle = '#eab308'; ctx.fillRect(resX + 27, resY - 6, 3, 12);
-
-        // Resistor lead wires
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(resX, resY);
-        ctx.lineTo(resX - 20, resY);
-        ctx.moveTo(resX + 36, resY);
-        ctx.lineTo(resX + 55, resY);
-        ctx.stroke();
-
-        ctx.fillStyle = '#64748b';
-        ctx.font = '8px JetBrains Mono, monospace';
-        ctx.fillText('220Ω (LED limit)', resX + 18, resY + 18);
-      }
-
-      // ── Physical Curved Jumper Wires (DuPont Cables) ─────────────
-      const redRailY = startY + 28;
-      const blueRailY = startY + 54;
-
-      // 1. ESP32 Onboard 3.3V Pin to Red Rail (+)
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(mcuX + 25, mcuY + 10);
-      ctx.quadraticCurveTo(mcuX + 30, startY + 15, mcuX + 60, redRailY);
-      ctx.stroke();
-      ctx.fillStyle = '#ef4444';
-      ctx.font = 'bold 9px JetBrains Mono, monospace';
-      ctx.fillText('ESP32 3V3 Pin ──▶ Red Rail (+)', mcuX + 65, redRailY - 5);
-
-      // 2. ESP32 GND Pin to Blue Rail (-)
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(mcuX + 25, mcuY + 25);
-      ctx.quadraticCurveTo(mcuX + 30, startY + 45, mcuX + 80, blueRailY);
-      ctx.stroke();
-      ctx.fillStyle = '#3b82f6';
-      ctx.fillText('ESP32 GND Pin ──▶ Blue Rail (-)', mcuX + 85, blueRailY + 14);
-
-      // 3. Power Distribution: Both BME280 & SSD1306 powered from Rails
-      compPositions.forEach((target) => {
-        // Red rail to Component VCC
-        ctx.strokeStyle = '#ef4444';
+      // Draw signal wires directly from the generated mappings. No board-specific pins are guessed.
+      const signalMappings = design.pinMappings.filter(mapping => ['I2C', 'SPI', 'I2S', 'UART', 'GPIO', 'PWM', 'ADC'].includes(mapping.protocol));
+      signalMappings.forEach((mapping, index) => {
+        const target = compPositions.find(component => component.id === mapping.componentId);
+        if (!target) return;
+        const colors: Record<string, string> = { I2C: '#267ea5', SPI: '#7557b7', I2S: '#208d91', UART: '#9659a5', PWM: '#c97737', ADC: '#39866a', GPIO: '#687f91' };
+        const color = mapping.wireColor || colors[mapping.protocol] || '#687f91';
+        const sourceX = mcuX + mcuWidth;
+        const sourceY = mcuY + 18 + (index % 4) * 14;
+        const targetX = target.x + target.w / 2;
+        const targetY = target.y + target.h;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        const tapX = target.x + 25;
-        ctx.moveTo(tapX, redRailY);
-        ctx.quadraticCurveTo(tapX - 10, target.y - 15, target.x + 20, target.y);
+        ctx.moveTo(sourceX, sourceY);
+        ctx.bezierCurveTo(sourceX + 35, sourceY + 35 + index * 3, targetX, targetY + 35 + index * 3, targetX, targetY);
         ctx.stroke();
-
-        // Blue rail to Component GND
-        ctx.strokeStyle = '#3b82f6';
-        ctx.beginPath();
-        ctx.moveTo(tapX + 20, blueRailY);
-        ctx.quadraticCurveTo(tapX + 10, target.y - 10, target.x + 40, target.y);
-        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(sourceX, sourceY, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(targetX, targetY, 3, 0, Math.PI * 2); ctx.fill();
       });
-
-      // 4. Parallel I2C Bus Jumpers (GPIO21 -> SDA, GPIO22 -> SCL)
-      const sdaMcuX = mcuX + mcuWidth - 10;
-      const sdaMcuY = mcuY + 30;
-      const sclMcuX = mcuX + mcuWidth - 10;
-      const sclMcuY = mcuY + 50;
-
-      compPositions.forEach((target, idx) => {
-        // SDA Jumper (Blue / Cyan) in parallel
-        ctx.strokeStyle = '#0284c7';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(sdaMcuX, sdaMcuY);
-        const sdaDestX = target.x + (target.isOled ? 60 : 45);
-        const sdaDestY = target.y + target.h;
-        ctx.bezierCurveTo((sdaMcuX + sdaDestX) / 2, sdaMcuY + 60 + idx * 18, (sdaMcuX + sdaDestX) / 2, sdaDestY + 40 + idx * 10, sdaDestX, sdaDestY);
-        ctx.stroke();
-
-        // SCL Jumper (Yellow) in parallel
-        ctx.strokeStyle = '#eab308';
-        ctx.beginPath();
-        ctx.moveTo(sclMcuX, sclMcuY);
-        const sclDestX = target.x + (target.isOled ? 85 : 70);
-        const sclDestY = target.y + target.h;
-        ctx.bezierCurveTo((sclMcuX + sclDestX) / 2, sclMcuY + 75 + idx * 18, (sclMcuX + sclDestX) / 2, sclDestY + 55 + idx * 10, sclDestX, sclDestY);
-        ctx.stroke();
-      });
-
-      ctx.fillStyle = '#0284c7';
-      ctx.font = 'bold 10px JetBrains Mono, monospace';
-      ctx.fillText('SDA ──▶ GPIO21 (Shared I2C Data)', sdaMcuX - 70, sdaMcuY - 6);
-      ctx.fillStyle = '#eab308';
-      ctx.fillText('SCL ──▶ GPIO22 (Shared I2C Clock)', sclMcuX - 70, sclMcuY + 16);
-
       // Bottom Legend
       ctx.fillStyle = '#94a3b8';
       ctx.font = '11px Inter, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText('Breadboard Wiring: ESP32 powers Red (+) / Blue (-) rails. BME280 & SSD1306 OLED tap rails and share I2C bus (GPIO21/22).', startX + 10, startY + boardHeight + 35);
+      ctx.fillText(`Generated signal mappings: ${signalMappings.length} nets. Check the pin mapping table for power and ground.`, startX + 10, startY + boardHeight + 35);
     };
 
     const observer = new ResizeObserver(drawBreadboard);
@@ -355,8 +264,8 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
     <div className="breadboard-view-container">
       <div className="breadboard-header">
         <div>
-          <h2>Interactive 2D Physical Breadboard View</h2>
-          <p>Realistic solderless breadboard layout showing dual power rails, center trench IC straddling, and DuPont jumper cables.</p>
+          <h2>Physical wiring preview</h2>
+          <p>Visual placement preview. Signal wires use the generated pin mapping; verify the hardware pinout before wiring.</p>
         </div>
         <div className="schematic-counts">
           <span className="badge badge-cyan">{design.components.length} Breadboard ICs</span>
