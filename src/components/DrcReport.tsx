@@ -16,9 +16,9 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
   // Requirement 4: Explicit 5-Point DRC Validation Suite
   // 1. I2C pull-up resistor presence
   const hasI2C = design.pinMappings.some(p => p.protocol === 'I2C');
-  const hasPullupResistor = design.components.some(c => 
-    c.name.toLowerCase().includes('pull-up') || c.name.toLowerCase().includes('4.7k') || (c.category === 'Passive' && c.name.toLowerCase().includes('resistor'))
-  );
+  const hasSdaPullup = design.components.some(c => /pull-up.*sda/i.test(c.name));
+  const hasSclPullup = design.components.some(c => /pull-up.*scl/i.test(c.name));
+  const hasPullupResistor = hasSdaPullup && hasSclPullup;
   const i2cPullupStatus: 'PASS' | 'FAIL' = hasI2C ? (hasPullupResistor ? 'PASS' : 'FAIL') : 'PASS';
 
   // 2. Decoupling capacitor proximity (<10mm from IC)
@@ -29,7 +29,9 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
 
   // 3. Voltage regulator capacitor presence
   const hasLinearRegulator = design.components.some(c => c.name.toLowerCase().includes('ams1117') || c.name.toLowerCase().includes('ldo'));
-  const hasRegulatorCaps = design.components.some(c => c.name.toLowerCase().includes('10µf') || c.name.toLowerCase().includes('10uf') || c.name.toLowerCase().includes('regulator'));
+  const hasRegulatorInputCap = design.components.some(c => /10\s*(?:µ|u)?f.*input|input.*10\s*(?:µ|u)?f/i.test(c.name));
+  const hasRegulatorOutputCap = design.components.some(c => /10\s*(?:µ|u)?f.*output|output.*10\s*(?:µ|u)?f/i.test(c.name));
+  const hasRegulatorCaps = hasRegulatorInputCap && hasRegulatorOutputCap;
   const regCapStatus: 'PASS' | 'FAIL' = hasLinearRegulator ? (hasRegulatorCaps ? 'PASS' : 'FAIL') : 'PASS';
 
   // 4. I2C address conflict detection

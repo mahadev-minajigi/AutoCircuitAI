@@ -121,6 +121,7 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
         if comp.id == mcu.id:
             continue
         mapped_pins = {m.componentPin for m in design.pinMappings if m.componentId == comp.id}
+        mapped_pins.update(m.mcuPin for m in design.pinMappings if m.sourceComponentId == comp.id)
         unmapped = [p for p in comp.pins if p not in mapped_pins]
         if unmapped:
             rules.append(DrcRule(
@@ -149,7 +150,7 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
         ))
 
     # Pin count utilization
-    used_pins = {m.mcuPin for m in design.pinMappings}
+    used_pins = {m.mcuPin for m in design.pinMappings if not m.sourceComponentId}
     if mcu.pins and len(used_pins) > len(mcu.pins):
         rules.append(DrcRule(
             type="Error",
@@ -189,6 +190,10 @@ TEMPLATES = {
         "pinMappings": [
             {"mcuPin": "5V", "componentId": "p1", "componentPin": "VIN", "protocol": "Power", "description": "Input to regulator; ensure this voltage matches the selected module"},
             {"mcuPin": "GND", "componentId": "p1", "componentPin": "GND", "protocol": "GND", "description": "Common ground"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "s1", "componentPin": "VCC", "protocol": "Power", "description": "Regulated 3.3V to BME280"},
+            {"mcuPin": "GND", "componentId": "s1", "componentPin": "GND", "protocol": "GND", "description": "BME280 ground"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "d1", "componentPin": "VCC", "protocol": "Power", "description": "Regulated 3.3V to OLED"},
+            {"mcuPin": "GND", "componentId": "d1", "componentPin": "GND", "protocol": "GND", "description": "OLED ground"},
             {"mcuPin": "GPIO21", "componentId": "s1", "componentPin": "SDA", "protocol": "I2C", "description": "I2C data"},
             {"mcuPin": "GPIO22", "componentId": "s1", "componentPin": "SCL", "protocol": "I2C", "description": "I2C clock"},
             {"mcuPin": "GPIO21", "componentId": "d1", "componentPin": "SDA", "protocol": "I2C", "description": "Shared I2C data"},
@@ -198,7 +203,17 @@ TEMPLATES = {
             {"mcuPin": "GPIO22", "componentId": "r2", "componentPin": "2", "protocol": "I2C", "description": "SCL pull-up branch"},
             {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "r2", "componentPin": "1", "protocol": "Power", "description": "SCL pull-up to regulated rail"},
             {"mcuPin": "SDO", "sourceComponentId": "s1", "componentId": "r3", "componentPin": "1", "protocol": "GND", "description": "SDO address strap through 10k resistor"},
-            {"mcuPin": "GND", "componentId": "r3", "componentPin": "2", "protocol": "GND", "description": "SDO pull-down ground"}
+            {"mcuPin": "GND", "componentId": "r3", "componentPin": "2", "protocol": "GND", "description": "SDO pull-down ground"},
+            {"mcuPin": "3V3", "componentId": "c1", "componentPin": "1", "protocol": "Power", "description": "ESP32 local bypass supply"},
+            {"mcuPin": "GND", "componentId": "c1", "componentPin": "2", "protocol": "GND", "description": "ESP32 local bypass ground"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "c2", "componentPin": "1", "protocol": "Power", "description": "BME280 local bypass supply"},
+            {"mcuPin": "GND", "componentId": "c2", "componentPin": "2", "protocol": "GND", "description": "BME280 local bypass ground"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "c3", "componentPin": "1", "protocol": "Power", "description": "OLED local bypass supply"},
+            {"mcuPin": "GND", "componentId": "c3", "componentPin": "2", "protocol": "GND", "description": "OLED local bypass ground"},
+            {"mcuPin": "5V", "componentId": "c4", "componentPin": "1", "protocol": "Power", "description": "AMS1117 input capacitor supply"},
+            {"mcuPin": "GND", "componentId": "c4", "componentPin": "2", "protocol": "GND", "description": "AMS1117 input capacitor ground"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "c5", "componentPin": "1", "protocol": "Power", "description": "AMS1117 output capacitor supply"},
+            {"mcuPin": "GND", "componentId": "c5", "componentPin": "2", "protocol": "GND", "description": "AMS1117 output capacitor ground"}
         ],
         "firmwareCode": """#include <Wire.h>
 #include <Adafruit_Sensor.h>

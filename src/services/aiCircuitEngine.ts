@@ -91,11 +91,11 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
   // Unconnected peripheral pin detection
   design.components.forEach(comp => {
     if (comp.id === mcu.id) return;
-    const mappedPins = new Set(
-      design.pinMappings
-        .filter(m => m.componentId === comp.id)
-        .map(m => m.componentPin)
-    );
+    const mappedPins = new Set<string>();
+    design.pinMappings.forEach(mapping => {
+      if (mapping.componentId === comp.id) mappedPins.add(mapping.componentPin);
+      if (mapping.sourceComponentId === comp.id) mappedPins.add(mapping.mcuPin);
+    });
     const unmapped = comp.pins.filter(pin => !mappedPins.has(pin));
     if (unmapped.length > 0) {
       rules.push({
@@ -139,11 +139,15 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
   }
 
   // Power Shorts check: verify no direct VCC to GND bridging
-  const shortCheck = design.pinMappings.some(p => 
-    (p.mcuPin.includes('GND') && p.componentPin.includes('VCC')) ||
-    (p.mcuPin.includes('3V3') && p.componentPin.includes('GND')) ||
-    (p.mcuPin.includes('5V') && p.componentPin.includes('GND'))
-  );
+  const shortCheck = design.pinMappings.some(mapping => {
+    const source = mapping.sourceComponentId ? design.components.find(component => component.id === mapping.sourceComponentId) : mcu;
+    const target = design.components.find(component => component.id === mapping.componentId);
+    const sourceGround = /^(gnd|ground)$/i.test(mapping.mcuPin);
+    const targetGround = /^(gnd|ground)$/i.test(mapping.componentPin);
+    const sourcePower = /^(vcc|vin|vout|3v3|5v|5v0)$/i.test(mapping.mcuPin);
+    const targetPower = /^(vcc|vin|vout|3v3|5v|5v0)$/i.test(mapping.componentPin);
+    return !!source && !!target && ((sourceGround && targetPower) || (sourcePower && targetGround));
+  });
   if (shortCheck) {
     rules.push({
       type: 'Error',
@@ -157,7 +161,7 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
   }
 
   // Pin count & used pin set
-  const usedMcuPins = new Set(design.pinMappings.map(m => m.mcuPin));
+  const usedMcuPins = new Set(design.pinMappings.filter(mapping => !mapping.sourceComponentId).map(mapping => mapping.mcuPin));
 
   // Clearances check: trace separation and safe pin density
   const highPinDensity = mcu.pins.length > 0 && (usedMcuPins.size / mcu.pins.length) > 0.95;

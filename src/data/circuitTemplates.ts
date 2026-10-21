@@ -13,7 +13,7 @@ export const templates: Record<string, CircuitDesign> = {
         category: 'MCU',
         package: 'NodeMCU-30Pin / SMD',
         estimatedCost: 350.00,
-        pins: ['3V3', 'GND', 'EN', 'IO21', 'IO22', 'IO34', 'IO35', 'IO2'],
+        pins: ['5V', '3V3', 'GND', 'EN', 'IO21', 'IO22', 'IO34', 'IO35', 'IO2'],
         operatingVoltage: 3.3,
         maxCurrent_mA: 240, // 240mA average, 350mA peak (WiFi TX)
         pinDescriptions: {
@@ -167,7 +167,6 @@ export const templates: Record<string, CircuitDesign> = {
       { mcuPin: 'VOUT', sourceComponentId: 'vr1', componentId: 'd1', componentPin: 'VCC', protocol: 'Power', description: 'Regulated 3.3V rail to OLED', wireColor: '#ef4444' },
       { mcuPin: 'GND', componentId: 's1', componentPin: 'GND', protocol: 'GND', description: 'Common Ground connection to BME280', wireColor: '#1e293b' },
       { mcuPin: 'GND', componentId: 'd1', componentPin: 'GND', protocol: 'GND', description: 'Common Ground connection to OLED', wireColor: '#1e293b' },
-      { mcuPin: 'GND', componentId: 's1', componentPin: 'SDO', protocol: 'GND', description: 'BME280 SDO pin pulled to GND for I2C address 0x76', wireColor: '#1e293b' },
       { mcuPin: 'SDO', sourceComponentId: 's1', componentId: 'r_sdo', componentPin: '1', protocol: 'GND', description: 'BME280 SDO address strap into 10kΩ pull-down', wireColor: '#64748b' },
       { mcuPin: 'GND', componentId: 'r_sdo', componentPin: '2', protocol: 'GND', description: '10kΩ pull-down terminates at ground', wireColor: '#1e293b' },
       { mcuPin: 'IO21', componentId: 's1', componentPin: 'SDA', protocol: 'I2C', description: 'Shared I2C Data Line (SDA)', wireColor: '#3b82f6' },
