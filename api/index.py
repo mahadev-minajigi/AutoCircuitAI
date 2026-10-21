@@ -366,7 +366,9 @@ JSON format requirements:
 CRITICAL ELECTRICAL RULES:
 1. For regulators (e.g., AMS1117-3.3), maxCurrent_mA must be the QUIESCENT current (~5mA), NOT the rated 800mA output capacity.
 2. ESP32 typical current is ~240mA (350mA peak WiFi TX). Sensors like BME280 draw ~1mA, OLED displays draw ~20mA.
-3. Every design MUST include exactly one MCU, correct power/GND connections, realistic pin numbers, and valid firmware."""
+3. Every design MUST include exactly one MCU, correct power/GND connections, realistic pin numbers, and valid firmware.
+4. For I2C buses, include a separate 4.7kΩ pull-up on SDA and SCL to the MCU logic rail unless the selected modules explicitly include pull-ups. Add 100nF bypass capacitors across supply and ground at each MCU and IC; note physical placement within 10mm is a build instruction, not something proven by this JSON.
+5. Never claim a component is connected unless its pins are included in pinMappings."""
 
         # Use gemini-2.5-flash-lite which is active and highly responsive
         model_name = 'gemini-2.5-flash-lite'
@@ -385,11 +387,59 @@ CRITICAL ELECTRICAL RULES:
             return None
         data = json.loads(raw_json)
         design = CircuitDesign(**data)
+        ensure_design_support_parts(design)
         design.drcReport = run_drc(design)
         return design
     except Exception as e:
         print(f"Gemini API generation error: {e}")
         return None
+
+def ensure_design_support_parts(design: CircuitDesign) -> None:
+    """Add missing I2C pull-ups and bypass capacitors with explicit pin mappings."""
+    mcu = next((component for component in design.components if component.category == 'MCU'), None)
+    if not mcu:
+        return
+
+    power_pin = next((pin for pin in mcu.pins if pin.lower() in {'3v3', '3.3v', 'vcc'}), None)
+    ground_pin = next((pin for pin in mcu.pins if pin.lower() in {'gnd', 'ground'}), None)
+    if not power_pin or not ground_pin:
+        return
+
+    def add_mapping(mcu_pin: str, component_id: str, component_pin: str, protocol: str, description: str, source_component_id: Optional[str] = None) -> None:
+        if any(mapping.mcuPin == mcu_pin and mapping.componentId == component_id and mapping.componentPin == component_pin and mapping.sourceComponentId == source_component_id for mapping in design.pinMappings):
+            return
+        design.pinMappings.append(PinMapping(mcuPin=mcu_pin, componentId=component_id, componentPin=component_pin, protocol=protocol, description=description, sourceComponentId=source_component_id))
+
+    i2c = [mapping for mapping in design.pinMappings if mapping.protocol == 'I2C']
+    if i2c:
+        for line in ('SDA', 'SCL'):
+            line_maps = [mapping for mapping in i2c if line in mapping.componentPin.upper() or line in mapping.description.upper()]
+            if not line_maps:
+                continue
+            existing = next((component for component in design.components if 'pull' in (component.name + ' ' + component.description).lower() and line.lower() in (component.name + ' ' + component.description).lower()), None)
+            if existing is None:
+                component_id = f"auto_pullup_{line.lower()}"
+                existing = Component(id=component_id, name=f"4.7kΩ I2C Pull-Up ({line})", description=f"Auto-added {line} pull-up to {mcu.name} logic rail", category='Passive', package='Axial / 0805', estimatedCost=2.0, pins=['1', '2'], operatingVoltage=mcu.operatingVoltage or 3.3, maxCurrent_mA=0.7)
+                design.components.append(existing)
+            bus_pin = line_maps[0].mcuPin
+            add_mapping(power_pin, existing.id, '1', 'Power', f"{line} pull-up to logic supply")
+            add_mapping(bus_pin, existing.id, '2', 'I2C', f"{line} pull-up branch to shared bus")
+
+    powered_ics = [component for component in design.components if component.category in {'MCU', 'Sensor', 'Actuator'}]
+    for ic in powered_ics:
+        marker = ic.name.lower().split()[0]
+        cap = next((component for component in design.components if component.category == 'Passive' and ('100nf' in (component.name + ' ' + component.description).lower() or 'decoupl' in (component.name + ' ' + component.description).lower()) and marker in (component.name + ' ' + component.description).lower()), None)
+        if cap is None:
+            cap = Component(id=f"auto_bypass_{ic.id}", name=f"100nF Decoupling Capacitor ({ic.name})", description=f"Place across {ic.name} supply and ground pins within 10mm", category='Passive', package='0805', estimatedCost=3.0, pins=['1', '2'], operatingVoltage=mcu.operatingVoltage or 3.3, maxCurrent_mA=0)
+            design.components.append(cap)
+        supply_map = next((mapping for mapping in design.pinMappings if mapping.componentId == ic.id and mapping.componentPin.lower() in {'vcc', 'vin', '3v3', 'vdd', 'vsup'} and mapping.protocol == 'Power'), None)
+        ground_map = next((mapping for mapping in design.pinMappings if mapping.componentId == ic.id and mapping.componentPin.lower() in {'gnd', 'ground'} and mapping.protocol == 'GND'), None)
+        supply_source = supply_map.sourceComponentId if supply_map else None
+        supply_node = supply_map.componentPin if supply_source else (supply_map.mcuPin if supply_map else power_pin)
+        ground_source = ground_map.sourceComponentId if ground_map else None
+        ground_node = ground_map.componentPin if ground_source else (ground_map.mcuPin if ground_map else ground_pin)
+        add_mapping(supply_node, cap.id, '1', 'Power', f"{ic.name} local bypass supply connection", supply_source)
+        add_mapping(ground_node, cap.id, '2', 'GND', f"{ic.name} local bypass ground connection", ground_source)
 
 # ----------------- Endpoints -----------------
 

@@ -16,15 +16,27 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
   // Requirement 4: Explicit 5-Point DRC Validation Suite
   // 1. I2C pull-up resistor presence
   const hasI2C = design.pinMappings.some(p => p.protocol === 'I2C');
-  const hasSdaPullup = design.components.some(c => /pull-up.*sda/i.test(c.name));
-  const hasSclPullup = design.components.some(c => /pull-up.*scl/i.test(c.name));
+  const isPullup = (component: typeof design.components[number]) => /pull[\s-]?up/i.test(`${component.name} ${component.description}`);
+  const hasPullupForLine = (line: 'SDA' | 'SCL') => design.components.some(component => {
+    if (!isPullup(component) || !new RegExp(line, 'i').test(`${component.name} ${component.description}`)) return false;
+    const endpoints = design.pinMappings.filter(mapping => mapping.componentId === component.id);
+    return endpoints.some(mapping => mapping.componentPin === '1' && mapping.protocol === 'Power') &&
+      endpoints.some(mapping => mapping.componentPin === '2' && mapping.protocol === 'I2C');
+  });
+  const hasSdaPullup = hasPullupForLine('SDA');
+  const hasSclPullup = hasPullupForLine('SCL');
   const hasPullupResistor = hasSdaPullup && hasSclPullup;
   const i2cPullupStatus: 'PASS' | 'FAIL' = hasI2C ? (hasPullupResistor ? 'PASS' : 'FAIL') : 'PASS';
 
-  // 2. Decoupling capacitor proximity (<10mm from IC)
-  const hasDecouplingCap = design.components.some(c => 
-    c.name.toLowerCase().includes('100nf') || c.name.toLowerCase().includes('decoupling') || c.name.toLowerCase().includes('bypass')
-  );
+  // 2. Per-IC bypass capacitor connectivity; physical distance is a build constraint.
+  const poweredIcCount = design.components.filter(component => ['MCU', 'Sensor', 'Actuator'].includes(component.category)).length;
+  const wiredDecouplingCaps = design.components.filter(component => {
+    if (!/100\s*n\s*f|decoupl|bypass/i.test(`${component.name} ${component.description}`)) return false;
+    const endpoints = design.pinMappings.filter(mapping => mapping.componentId === component.id);
+    return endpoints.some(mapping => mapping.componentPin === '1' && mapping.protocol === 'Power') &&
+      endpoints.some(mapping => mapping.componentPin === '2' && mapping.protocol === 'GND');
+  }).length;
+  const hasDecouplingCap = poweredIcCount > 0 && wiredDecouplingCaps >= poweredIcCount;
   const decouplingStatus: 'PASS' | 'FAIL' = hasDecouplingCap ? 'PASS' : 'FAIL';
 
   // 3. Voltage regulator capacitor presence
@@ -131,7 +143,7 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
               <span className="status-pill status-fail"><X size={14} /> FAIL</span>
             )}
           </div>
-          <p className="drc-check-desc">100nF ceramic caps assigned within &lt;10mm of IC VCC/GND pairs.</p>
+          <p className="drc-check-desc">A 100nF capacitor is wired across supply and ground for each modeled IC. Place each capacitor within 10mm during assembly.</p>
         </div>
 
         {/* 3. Voltage Regulator Capacitors */}
