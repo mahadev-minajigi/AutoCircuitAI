@@ -29,14 +29,29 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
     }
   });
 
+  // Structural connectivity validation for generated designs.
+  design.pinMappings.forEach(mapping => {
+    const target = design.components.find(component => component.id === mapping.componentId);
+    const source = mapping.sourceComponentId ? design.components.find(component => component.id === mapping.sourceComponentId) : mcu;
+    if (!target || !source) {
+      rules.push({ type: 'Error', message: `Invalid connection endpoint | Mapping ${mapping.mcuPin} → ${mapping.componentId}.${mapping.componentPin} references a missing component. | Regenerate the design or correct the mapping.` });
+      return;
+    }
+    if (!target.pins.includes(mapping.componentPin) || !source.pins.includes(mapping.mcuPin)) {
+      rules.push({ type: 'Error', message: `Invalid pin mapping | ${source.name}.${mapping.mcuPin} → ${target.name}.${mapping.componentPin} uses a pin not listed on the component. | Verify the exact board and module pinout.` });
+    }
+  });
+
   // I2C pull-up and bus checks
   const i2cPins = design.pinMappings.filter(p => p.protocol === 'I2C');
   if (i2cPins.length > 0) {
-    const hasPullups = design.components.some(c => c.name.toLowerCase().includes('pull-up') || c.name.toLowerCase().includes('resistor'));
-    if (hasPullups) {
-      rules.push({ type: 'Pass', message: 'I2C pull-up verified | The communication bus includes the required supporting components. | No action required.' });
+    const pullupNames = design.components.filter(c => c.name.toLowerCase().includes('pull-up')).map(c => c.name.toLowerCase());
+    const hasSdaPullup = pullupNames.some(name => name.includes('sda'));
+    const hasSclPullup = pullupNames.some(name => name.includes('scl'));
+    if (hasSdaPullup && hasSclPullup) {
+      rules.push({ type: 'Pass', message: 'I2C pull-ups present | Separate SDA and SCL pull-up components are included. | Confirm their value and whether modules already include pull-ups.' });
     } else {
-      rules.push({ type: 'Pass', message: 'I2C pin mapping generated | SDA and SCL are mapped to the selected modules. | Verify that the modules provide I2C pull-up resistors.' });
+      rules.push({ type: 'Warning', message: `I2C pull-ups not fully verified | Explicit pull-ups missing for ${[!hasSdaPullup && 'SDA', !hasSclPullup && 'SCL'].filter(Boolean).join(' and ')}. | Add pull-ups to the correct logic rail or confirm module pull-ups.` });
     }
   }
 

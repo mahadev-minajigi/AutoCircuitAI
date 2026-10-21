@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 import uuid
 from typing import List, Optional, Literal
@@ -40,6 +40,7 @@ class PinMapping(BaseModel):
     mcuPin: str
     componentId: str
     componentPin: str
+    sourceComponentId: Optional[str] = None
     protocol: Literal['GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'Power', 'GND', 'I2S']
     description: str
 
@@ -93,14 +94,27 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
                     message=f"{comp.name} voltage compatible | {comp.name} ({comp.operatingVoltage}V) is compatible with {mcu.name} ({mcu.operatingVoltage}V). | No change required."
                 ))
 
+    # Validate every generated connection endpoint before presenting a schematic.
+    component_by_id = {component.id: component for component in design.components}
+    for mapping in design.pinMappings:
+        source = component_by_id.get(mapping.sourceComponentId) if mapping.sourceComponentId else mcu
+        target = component_by_id.get(mapping.componentId)
+        if not source or not target:
+            rules.append(DrcRule(type="Error", message=f"Invalid connection endpoint | {mapping.mcuPin} to {mapping.componentId}.{mapping.componentPin} references a missing component. | Regenerate or correct the mapping."))
+        elif mapping.mcuPin not in source.pins or mapping.componentPin not in target.pins:
+            rules.append(DrcRule(type="Error", message=f"Invalid pin mapping | {source.name}.{mapping.mcuPin} to {target.name}.{mapping.componentPin} uses an undefined pin. | Confirm the exact board and module pinout."))
+
     # I2C pull-up and bus check
     i2c_pins = [p for p in design.pinMappings if p.protocol == 'I2C']
     if i2c_pins:
-        has_pullups = any('pull-up' in c.name.lower() or 'resistor' in c.name.lower() for c in design.components)
-        if has_pullups:
-            rules.append(DrcRule(type="Pass", message="I2C pull-up verified | The communication bus includes the required supporting components. | No action required."))
+        pullup_names = [c.name.lower() for c in design.components if 'pull-up' in c.name.lower()]
+        has_sda_pullup = any('sda' in name for name in pullup_names)
+        has_scl_pullup = any('scl' in name for name in pullup_names)
+        if has_sda_pullup and has_scl_pullup:
+            rules.append(DrcRule(type="Pass", message="I2C pull-ups present | Separate SDA and SCL pull-up resistors are included. | Confirm their value and that the modules do not already include pull-ups."))
         else:
-            rules.append(DrcRule(type="Pass", message="I2C pin mapping generated | SDA and SCL are mapped to the selected modules. | Verify that the modules provide I2C pull-up resistors."))
+            missing = ', '.join(name for name, present in [('SDA', has_sda_pullup), ('SCL', has_scl_pullup)] if not present)
+            rules.append(DrcRule(type="Warning", message=f"I2C pull-ups not fully verified | Missing explicit pull-up for {missing or 'SDA and SCL'}. | Add one appropriately valued pull-up from each bus line to the correct logic supply, or verify onboard module pull-ups."))
 
     # Unconnected pins check
     for comp in design.components:
@@ -158,23 +172,33 @@ TEMPLATES = {
         "title": "ESP32 IoT Environmental Station",
         "description": "Wi-Fi enabled weather monitor tracking temperature, humidity, and barometric pressure with OLED readout.",
         "components": [
-            {"id": "mcu1", "name": "ESP32-WROOM-32", "description": "Dual-core Wi-Fi & BLE Microcontroller", "category": "MCU", "package": "QFN-48", "estimatedCost": 350.00, "pins": ["3V3", "GND", "GPIO21", "GPIO22", "GPIO34", "GPIO35", "GPIO2", "EN"], "operatingVoltage": 3.3, "maxCurrent_mA": 240},
-            {"id": "s1", "name": "BME280", "description": "Digital Temperature, Humidity & Pressure Sensor", "category": "Sensor", "package": "LGA-8", "estimatedCost": 220.00, "pins": ["VCC", "GND", "SDA", "SCL"], "operatingVoltage": 3.3, "maxCurrent_mA": 1},
-            {"id": "d1", "name": "SSD1306 0.96 OLED", "description": "128x64 Monochrome I2C OLED Display", "category": "Actuator", "package": "Module", "estimatedCost": 180.00, "pins": ["VCC", "GND", "SDA", "SCL"], "operatingVoltage": 3.3, "maxCurrent_mA": 20},
-            {"id": "p1", "name": "AMS1117-3.3", "description": "3.3V Low-Dropout Voltage Regulator (5mA quiescent)", "category": "Power", "package": "SOT-223", "estimatedCost": 25.00, "pins": ["VIN", "VOUT", "GND"], "operatingVoltage": 3.3, "maxCurrent_mA": 5},
-            {"id": "r1", "name": "4.7kΩ Pull-Up Resistor (SDA)", "description": "I2C SDA pull-up to 3.3V", "category": "Passive", "package": "0805", "estimatedCost": 2.00, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 1},
-            {"id": "r2", "name": "4.7kΩ Pull-Up Resistor (SCL)", "description": "I2C SCL pull-up to 3.3V", "category": "Passive", "package": "0805", "estimatedCost": 2.00, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 1},
-            {"id": "c1", "name": "100nF Decoupling Capacitor", "description": "Ceramic bypass capacitor for ESP32/Sensors", "category": "Passive", "package": "0805", "estimatedCost": 3.00, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0}
+            {"id": "mcu1", "name": "ESP32-WROOM-32", "description": "Dual-core Wi-Fi & BLE Microcontroller", "category": "MCU", "package": "QFN-48", "estimatedCost": 350.0, "pins": ["5V", "3V3", "GND", "GPIO21", "GPIO22", "GPIO34", "GPIO35", "GPIO2", "EN"], "operatingVoltage": 3.3, "maxCurrent_mA": 240},
+            {"id": "s1", "name": "BME280", "description": "Digital temperature, humidity and pressure sensor", "category": "Sensor", "package": "LGA-8 module", "estimatedCost": 220.0, "pins": ["VCC", "GND", "SDA", "SCL", "SDO"], "operatingVoltage": 3.3, "maxCurrent_mA": 1},
+            {"id": "d1", "name": "SSD1306 OLED", "description": "128x64 I2C display", "category": "Actuator", "package": "Module", "estimatedCost": 180.0, "pins": ["VCC", "GND", "SDA", "SCL"], "operatingVoltage": 3.3, "maxCurrent_mA": 20},
+            {"id": "p1", "name": "AMS1117-3.3 Regulator", "description": "3.3V regulator module; confirm input and current requirements", "category": "Power", "package": "Module", "estimatedCost": 25.0, "pins": ["VIN", "VOUT", "GND"], "operatingVoltage": 3.3, "maxCurrent_mA": 5},
+            {"id": "r1", "name": "4.7kΩ Pull-Up Resistor (SDA)", "description": "SDA pull-up to 3.3V", "category": "Passive", "package": "Axial", "estimatedCost": 2.0, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0.7},
+            {"id": "r2", "name": "4.7kΩ Pull-Up Resistor (SCL)", "description": "SCL pull-up to 3.3V", "category": "Passive", "package": "Axial", "estimatedCost": 2.0, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0.7},
+            {"id": "r3", "name": "10kΩ Pull-Down Resistor (BME280 SDO)", "description": "SDO address strap to ground", "category": "Passive", "package": "Axial", "estimatedCost": 2.0, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0.33},
+            {"id": "c1", "name": "100nF Decoupling Capacitor (ESP32)", "description": "Local bypass capacitor", "category": "Passive", "package": "0805", "estimatedCost": 3.0, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0},
+            {"id": "c2", "name": "100nF Decoupling Capacitor (BME280)", "description": "Local bypass capacitor", "category": "Passive", "package": "0805", "estimatedCost": 3.0, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0},
+            {"id": "c3", "name": "100nF Decoupling Capacitor (OLED)", "description": "Local bypass capacitor", "category": "Passive", "package": "0805", "estimatedCost": 3.0, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0},
+            {"id": "c4", "name": "10µF Input Capacitor (AMS1117)", "description": "Regulator input bulk capacitor", "category": "Passive", "package": "Radial", "estimatedCost": 5.0, "pins": ["1", "2"], "operatingVoltage": 5.0, "maxCurrent_mA": 0},
+            {"id": "c5", "name": "10µF Output Capacitor (AMS1117)", "description": "Regulator output bulk capacitor", "category": "Passive", "package": "Radial", "estimatedCost": 5.0, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0}
+,
         ],
         "pinMappings": [
-            {"mcuPin": "3V3", "componentId": "s1", "componentPin": "VCC", "protocol": "Power", "description": "3.3V Power to BME280"},
-            {"mcuPin": "GND", "componentId": "s1", "componentPin": "GND", "protocol": "GND", "description": "Ground connection"},
-            {"mcuPin": "GPIO21", "componentId": "s1", "componentPin": "SDA", "protocol": "I2C", "description": "I2C Data line"},
-            {"mcuPin": "GPIO22", "componentId": "s1", "componentPin": "SCL", "protocol": "I2C", "description": "I2C Clock line"},
-            {"mcuPin": "3V3", "componentId": "d1", "componentPin": "VCC", "protocol": "Power", "description": "3.3V Power to OLED"},
-            {"mcuPin": "GND", "componentId": "d1", "componentPin": "GND", "protocol": "GND", "description": "Ground connection"},
-            {"mcuPin": "GPIO21", "componentId": "d1", "componentPin": "SDA", "protocol": "I2C", "description": "Shared I2C Data line"},
-            {"mcuPin": "GPIO22", "componentId": "d1", "componentPin": "SCL", "protocol": "I2C", "description": "Shared I2C Clock line"}
+            {"mcuPin": "5V", "componentId": "p1", "componentPin": "VIN", "protocol": "Power", "description": "Input to regulator; ensure this voltage matches the selected module"},
+            {"mcuPin": "GND", "componentId": "p1", "componentPin": "GND", "protocol": "GND", "description": "Common ground"},
+            {"mcuPin": "GPIO21", "componentId": "s1", "componentPin": "SDA", "protocol": "I2C", "description": "I2C data"},
+            {"mcuPin": "GPIO22", "componentId": "s1", "componentPin": "SCL", "protocol": "I2C", "description": "I2C clock"},
+            {"mcuPin": "GPIO21", "componentId": "d1", "componentPin": "SDA", "protocol": "I2C", "description": "Shared I2C data"},
+            {"mcuPin": "GPIO22", "componentId": "d1", "componentPin": "SCL", "protocol": "I2C", "description": "Shared I2C clock"},
+            {"mcuPin": "GPIO21", "componentId": "r1", "componentPin": "2", "protocol": "I2C", "description": "SDA pull-up branch"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "r1", "componentPin": "1", "protocol": "Power", "description": "SDA pull-up to regulated rail"},
+            {"mcuPin": "GPIO22", "componentId": "r2", "componentPin": "2", "protocol": "I2C", "description": "SCL pull-up branch"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "r2", "componentPin": "1", "protocol": "Power", "description": "SCL pull-up to regulated rail"},
+            {"mcuPin": "SDO", "sourceComponentId": "s1", "componentId": "r3", "componentPin": "1", "protocol": "GND", "description": "SDO address strap through 10k resistor"},
+            {"mcuPin": "GND", "componentId": "r3", "componentPin": "2", "protocol": "GND", "description": "SDO pull-down ground"}
         ],
         "firmwareCode": """#include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -228,10 +252,18 @@ void loop() {
             {"id": "p1", "name": "Mini 5V/3A BEC", "description": "Step-down Switching Voltage Regulator", "category": "Power", "package": "Module", "estimatedCost": 120.00, "pins": ["VIN", "VOUT", "GND"], "operatingVoltage": 5.0, "maxCurrent_mA": 3000}
         ],
         "pinMappings": [
-            {"mcuPin": "3V3", "componentId": "s1", "componentPin": "VCC", "protocol": "Power", "description": "3.3V Logic supply"},
-            {"mcuPin": "GND", "componentId": "s1", "componentPin": "GND", "protocol": "GND", "description": "Common ground"},
-            {"mcuPin": "PB6", "componentId": "s1", "componentPin": "SCL", "protocol": "I2C", "description": "I2C1 Clock line"},
-            {"mcuPin": "PB7", "componentId": "s1", "componentPin": "SDA", "protocol": "I2C", "description": "I2C1 Data line"}
+            {"mcuPin": "5V", "componentId": "p1", "componentPin": "VIN", "protocol": "Power", "description": "USB 5V input to AMS1117"},
+            {"mcuPin": "GND", "componentId": "p1", "componentPin": "GND", "protocol": "GND", "description": "Common system ground"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "s1", "componentPin": "VCC", "protocol": "Power", "description": "Regulated 3.3V to BME280"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "d1", "componentPin": "VCC", "protocol": "Power", "description": "Regulated 3.3V to OLED"},
+            {"mcuPin": "GPIO21", "componentId": "s1", "componentPin": "SDA", "protocol": "I2C", "description": "I2C data"},
+            {"mcuPin": "GPIO22", "componentId": "s1", "componentPin": "SCL", "protocol": "I2C", "description": "I2C clock"},
+            {"mcuPin": "GPIO21", "componentId": "d1", "componentPin": "SDA", "protocol": "I2C", "description": "Shared I2C data"},
+            {"mcuPin": "GPIO22", "componentId": "d1", "componentPin": "SCL", "protocol": "I2C", "description": "Shared I2C clock"},
+            {"mcuPin": "GPIO21", "componentId": "r1", "componentPin": "2", "protocol": "I2C", "description": "SDA 4.7k pull-up branch"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "r1", "componentPin": "1", "protocol": "Power", "description": "SDA pull-up to 3.3V"},
+            {"mcuPin": "GPIO22", "componentId": "r2", "componentPin": "2", "protocol": "I2C", "description": "SCL 4.7k pull-up branch"},
+            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "r2", "componentPin": "1", "protocol": "Power", "description": "SCL pull-up to 3.3V"}
         ],
         "firmwareCode": """#include <Wire.h>
 

@@ -30,6 +30,7 @@ export interface PinMapping {
   mcuPin: string;
   componentId: string;
   componentPin: string;
+  sourceComponentId?: string;
   protocol: 'GPIO' | 'I2C' | 'SPI' | 'UART' | 'ADC' | 'PWM' | 'Power' | 'GND' | 'I2S';
   description: string;
   wireColor?: string; // Standard practical breadboard wire color (e.g. Red for 3.3V, Black for GND, Yellow for SDA)
