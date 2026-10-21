@@ -325,7 +325,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
-  background: #fbfcfd;
+  background: #f3f7fa;
 }
 
 .schematic-fullscreen-toggle {
@@ -1409,11 +1409,11 @@ body {
 /* IC Schematic Component Box */
 .schematic-ic-box {
   background: #ffffff;
-  border: 1px solid #cbd5df;
+  border: 1px solid #9aabb8;
   border-radius: 10px;
   padding: 11px 13px;
   width: 220px;
-  box-shadow: 0 8px 20px rgba(23, 33, 43, 0.1);
+  box-shadow: 0 8px 20px rgba(23, 33, 43, 0.14);
   font-family: var(--font-mono);
   position: relative;
 }
@@ -1482,7 +1482,7 @@ body {
   gap: 8px;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: #f1f5f8;
   font-size: 0.75rem;
   width: 100%;
 }
@@ -1495,32 +1495,32 @@ body {
 
 .pin-lbl {
   font-weight: 600;
-  color: #e2e8f0;
+  color: #17212b;
 }
 
 .ic-pin-badge.pin-power {
   background: rgba(239, 68, 68, 0.15);
   border-left: 2px solid #ef4444;
 }
-.ic-pin-badge.pin-power .pin-lbl { color: #fca5a5; }
+.ic-pin-badge.pin-power .pin-lbl { color: #b42318; }
 
 .ic-pin-badge.pin-gnd {
   background: rgba(100, 116, 139, 0.15);
   border-left: 2px solid #64748b;
 }
-.ic-pin-badge.pin-gnd .pin-lbl { color: #cbd5e1; }
+.ic-pin-badge.pin-gnd .pin-lbl { color: #475569; }
 
 .ic-pin-badge.pin-clock {
   background: rgba(234, 179, 8, 0.15);
   border-left: 2px solid #eab308;
 }
-.ic-pin-badge.pin-clock .pin-lbl { color: #fde047; }
+.ic-pin-badge.pin-clock .pin-lbl { color: #854d0e; }
 
 .ic-pin-badge.pin-data {
   background: rgba(59, 130, 246, 0.15);
   border-left: 2px solid #3b82f6;
 }
-.ic-pin-badge.pin-data .pin-lbl { color: #93c5fd; }
+.ic-pin-badge.pin-data .pin-lbl { color: #1d4ed8; }
 
 .schematic-handle {
   width: 10px !important;
@@ -1704,6 +1704,7 @@ body {
 }
 
 .drc-badge-error { color: var(--accent-rose); }
+.drc-badge-review { color: var(--accent-amber); }
 .drc-badge-warn { color: var(--accent-amber); }
 .drc-badge-pass { color: var(--accent-emerald); }
 
@@ -1769,6 +1770,12 @@ body {
   border: 1px solid #ef4444;
 }
 
+.status-review {
+  background: rgba(255, 184, 0, 0.14);
+  color: var(--accent-amber);
+  border: 1px solid var(--accent-amber);
+}
+
 .drc-overall-card {
   border-width: 2px;
 }
@@ -1781,6 +1788,11 @@ body {
 .overall-not-ready {
   border-color: #ef4444;
   background: rgba(239, 68, 68, 0.06);
+}
+
+.overall-review {
+  border-color: var(--accent-amber);
+  background: rgba(255, 184, 0, 0.06);
 }
 
 .status-ready {

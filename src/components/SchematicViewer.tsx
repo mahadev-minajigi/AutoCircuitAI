@@ -304,8 +304,8 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           fontFamily: 'JetBrains Mono, monospace'
         },
         labelBgStyle: { 
-          fill: '#ffffff', 
-          fillOpacity: 0.95,
+          fill: '#f8fafc', 
+          fillOpacity: 1,
           rx: 4,
           ry: 4
         },
@@ -443,7 +443,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           attributionPosition="bottom-right"
         >
           {/* Engineering Dot Matrix / Grid Background */}
-          <Background color="rgba(8, 126, 139, 0.12)" gap={24} size={1.5} />
+          <Background color="#d7e3e9" gap={24} size={1.25} />
           <Controls style={{ background: 'var(--bg-panel)', fill: 'var(--text-main)', border: '1px solid var(--border-color)' }} />
           <MiniMap 
             nodeColor={(n) => n.data?.isMCU ? '#087e8b' : '#6b9ca2'}
