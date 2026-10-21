@@ -47,19 +47,32 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
   const regCapStatus: 'PASS' | 'FAIL' = hasLinearRegulator ? (hasRegulatorCaps ? 'PASS' : 'FAIL') : 'PASS';
 
   // 4. I2C address conflict detection
-  const i2cAddresses = new Set<string>();
-  let hasAddressConflict = false;
-  design.components.forEach(c => {
-    if (c.name.toLowerCase().includes('bme280')) {
-      if (i2cAddresses.has('0x76')) hasAddressConflict = true;
-      i2cAddresses.add('0x76');
-    }
-    if (c.name.toLowerCase().includes('oled') || c.name.toLowerCase().includes('ssd1306')) {
-      if (i2cAddresses.has('0x3C')) hasAddressConflict = true;
-      i2cAddresses.add('0x3C');
-    }
-  });
+  // Only real I2C devices count. Passives named after a nearby IC (for example,
+  // "100nF capacitor (BME280)") are not bus devices and must not create a collision.
+  const i2cDeviceIds = new Set(design.pinMappings
+    .filter(mapping => mapping.protocol === 'I2C')
+    .map(mapping => mapping.componentId));
+  const i2cDevices = design.components.filter(component =>
+    i2cDeviceIds.has(component.id) && ['Sensor', 'Actuator'].includes(component.category));
+  const getI2cAddress = (component: typeof design.components[number]) => {
+    const explicitAddress = 'i2cAddress' in component ? String(component.i2cAddress ?? '') : '';
+    const match = `${explicitAddress} ${component.name} ${component.description}`.match(/0x[\da-f]{1,2}/i);
+    if (match) return match[0].toLowerCase();
+    const identity = `${component.name} ${component.description}`.toLowerCase();
+    if (/bme280/.test(identity)) return '0x76';
+    if (/ssd1306|oled/.test(identity)) return '0x3c';
+    return null;
+  };
+  const knownI2cAddresses = i2cDevices.map(getI2cAddress).filter((address): address is string => address !== null);
+  const hasAddressConflict = new Set(knownI2cAddresses).size !== knownI2cAddresses.length;
   const i2cConflictStatus: 'PASS' | 'FAIL' = hasAddressConflict ? 'FAIL' : 'PASS';
+  const addressSummary = i2cDevices.length === 0
+    ? 'No I2C devices in this design.'
+    : hasAddressConflict
+      ? 'Two or more mapped I2C devices use the same known 7-bit address.'
+      : knownI2cAddresses.length === i2cDevices.length
+        ? `No duplicate addresses detected (${i2cDevices.map(device => `${device.name}: ${getI2cAddress(device)}`).join(', ')}).`
+        : 'No duplicate known addresses detected; confirm addresses for devices without an explicit or recognized address.';
 
   // 5. Logic level compatibility (3.3V vs 5V on data lines)
   const mcu = design.components.find(c => c.category === 'MCU');
@@ -175,7 +188,7 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
               <span className="status-pill status-fail"><X size={14} /> FAIL</span>
             )}
           </div>
-          <p className="drc-check-desc">Unique 7-bit bus addresses confirmed (BME280: 0x76, OLED: 0x3C).</p>
+          <p className="drc-check-desc">{addressSummary}</p>
         </div>
 
         {/* 5. Logic Level Compatibility */}
@@ -213,7 +226,7 @@ const DrcReport: React.FC<DrcReportProps> = ({ design }) => {
               : 'Resolve outstanding DRC errors before custom PCB manufacturing or powering on bare silicon.'}
           </p>
           <div style={{ marginTop: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px' }}>
-            💡 <strong>Hardware Context:</strong> If prototyping with pre-assembled breakout boards (ESP32 DevKit, BME280/SSD1306 modules), pull-ups and decoupling caps are already integrated onboard. For custom PCB fabrication with discrete ICs, external passives are strictly mandatory.
+            <strong>Hardware context:</strong> Breakout boards may include pull-ups or decoupling; check each module schematic. Bare ICs need external support parts. This report checks modeled connections and cannot verify onboard components or physical capacitor placement.
           </div>
         </div>
       </div>
