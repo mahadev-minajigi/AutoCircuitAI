@@ -11,16 +11,17 @@ import LabGuideView from './components/LabGuideView';
 import BreadboardVisualizer from './components/BreadboardVisualizer';
 import DesignHistory, { type HistoryEntry } from './components/DesignHistory';
 import Toast, { type ToastMessage } from './components/Toast';
-import { Cpu, List, FileCode2, CircuitBoard, LayoutDashboard, ShieldCheck, BookOpen, Layers } from 'lucide-react';
+import { Cpu, List, CircuitBoard, LayoutDashboard, ShieldCheck, BookOpen, Layers } from 'lucide-react';
 import { generateCircuit } from './services/aiCircuitEngine';
 import type { CircuitDesign } from './types/circuit';
 
-type TabId = 'schematic' | 'breadboard' | 'lab' | 'pinout' | 'bom' | 'code' | 'pcb' | 'drc';
+type TabId = 'schematic' | 'breadboard' | 'lab' | 'pinout' | 'bom' | 'pcb' | 'drc';
 
 const workflowSteps = ['Prompt', 'Analysis', 'Components', 'Circuit', 'Pin mapping', 'Validation', 'BOM', 'Firmware', 'PCB'];
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabId>('schematic');
+  const [isIdeOpen, setIsIdeOpen] = useState(false);
   const [design, setDesign] = useState<CircuitDesign | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingStep, setGeneratingStep] = useState(0);
@@ -97,7 +98,7 @@ function App() {
 
   return (
     <div className="app-container">
-      <Header currentDesign={design} onShowToast={showToast} />
+      <Header currentDesign={design} onShowToast={showToast} onOpenIDE={() => setIsIdeOpen(true)} />
       <Toast toasts={toasts} onDismiss={dismissToast} />
 
       <div className="main-content">
@@ -131,6 +132,15 @@ function App() {
                   ))}
                 </div>
               </div>
+            </div>
+          ) : design && isIdeOpen ? (
+            <div className="standalone-ide-page">
+              <CodeEditor
+                design={design}
+                onShowToast={showToast}
+                onClose={() => setIsIdeOpen(false)}
+                onFirmwareChange={firmwareCode => setDesign(current => current ? { ...current, firmwareCode } : current)}
+              />
             </div>
           ) : design ? (
             <>
@@ -175,7 +185,6 @@ function App() {
                   { id: 'drc' as TabId, icon: ShieldCheck, label: 'Checks', badge: (drcErrorCount > 0 ? 'error' : drcWarnCount > 0 ? 'warn' : null) as 'error' | 'warn' | null },
                   { id: 'pinout' as TabId, icon: Cpu, label: 'Pin mapping', badge: null as 'error' | 'warn' | null },
                   { id: 'bom' as TabId, icon: List, label: 'BOM', badge: null as 'error' | 'warn' | null },
-                  { id: 'code' as TabId, icon: FileCode2, label: 'Firmware', badge: null as 'error' | 'warn' | null },
                   { id: 'pcb' as TabId, icon: CircuitBoard, label: 'PCB', badge: null as 'error' | 'warn' | null },
                 ]).map(({ id, icon: Icon, label, badge }) => (
                   <button
@@ -197,7 +206,6 @@ function App() {
                 {activeTab === 'drc' && <DrcReport design={design} />}
                 {activeTab === 'pinout' && <PinoutTable design={design} onShowToast={showToast} />}
                 {activeTab === 'bom' && <BomTable design={design} />}
-                {activeTab === 'code' && <CodeEditor design={design} onShowToast={showToast} />}
                 {activeTab === 'pcb' && <PcbViewer design={design} />}
               </div>
             </>

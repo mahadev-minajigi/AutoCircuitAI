@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Download, FileJson, FileText, FileCode2 } from 'lucide-react';
+import { Zap, Download, FileJson, FileText, FileCode2, Cpu } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import type { CircuitDesign } from '../types/circuit';
 import { generateKiCadNetlist, generateEasyEdaJson } from '../services/aiCircuitEngine';
@@ -7,9 +7,10 @@ import { generateKiCadNetlist, generateEasyEdaJson } from '../services/aiCircuit
 interface HeaderProps {
   currentDesign: CircuitDesign | null;
   onShowToast: (message: string, type: 'success' | 'error' | 'info') => void;
+  onOpenIDE: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentDesign, onShowToast }) => {
+const Header: React.FC<HeaderProps> = ({ currentDesign, onShowToast, onOpenIDE }) => {
   const handleExport = () => {
     if (!currentDesign) {
       onShowToast('No design to export. Generate a circuit first.', 'error');
@@ -73,6 +74,9 @@ const Header: React.FC<HeaderProps> = ({ currentDesign, onShowToast }) => {
             <span className="file-badge" title="EasyEDA JSON"><FileJson size={13} /> EasyEDA</span>
           </div>
         )}
+        <button className="btn-secondary header-ide-btn" onClick={onOpenIDE} disabled={!currentDesign} title={currentDesign ? 'Open the firmware IDE for this circuit' : 'Generate a circuit to open its firmware IDE'}>
+          <Cpu size={16} /> IDE
+        </button>
         <button className="btn-primary export-btn" onClick={handleExport} disabled={!currentDesign} title="Export all files (Ctrl+E)">
           <Download size={16} /> Export All
         </button>

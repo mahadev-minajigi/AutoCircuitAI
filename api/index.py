@@ -2,6 +2,9 @@
 import json
 import uuid
 import re
+import shutil
+import subprocess
+import tempfile
 from typing import List, Optional, Literal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,6 +66,10 @@ class CircuitDesign(BaseModel):
 class GenerateRequest(BaseModel):
     prompt: str
     preset: Optional[str] = None
+
+class CompileRequest(BaseModel):
+    source: str
+    fqbn: str
 
 # ----------------- DRC Engine (Python implementation matching frontend) -----------------
 
@@ -495,6 +502,63 @@ def list_templates():
 @app.post("/api/drc", response_model=List[DrcRule])
 def check_drc(design: CircuitDesign):
     return run_drc(design)
+
+@app.post("/api/compile")
+def compile_firmware(req: CompileRequest):
+    allowed_targets = {
+        "arduino:avr:uno",
+        "esp32:esp32:esp32",
+        "rp2040:rp2040:rpipico",
+    }
+    if req.fqbn not in allowed_targets:
+        return {"status": "error", "output": "Unsupported board target. Select a listed Arduino, ESP32, or Pico board."}
+    if not req.source.strip() or len(req.source) > 60000:
+        return {"status": "error", "output": "Sketch must contain code and be smaller than 60 KB."}
+
+    cli = shutil.which("arduino-cli")
+    if not cli:
+        return {
+            "status": "unavailable",
+            "output": "Arduino CLI is not installed in this deployment, so compilation was not run. Install arduino-cli and the selected board core to enable real builds."
+        }
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="autocircuit-compile-") as temp_dir:
+            sketch_dir = os.path.join(temp_dir, "CircuitSketch")
+            os.makedirs(sketch_dir, exist_ok=True)
+            with open(os.path.join(sketch_dir, "CircuitSketch.ino"), "w", encoding="utf-8") as sketch_file:
+                sketch_file.write(req.source)
+            result = subprocess.run(
+                [cli, "compile", "--fqbn", req.fqbn, "--warnings", "all", sketch_dir],
+                capture_output=True,
+                text=True,
+                timeout=45,
+                check=False,
+                cwd=temp_dir,
+            )
+            output = (result.stdout + "\n" + result.stderr).strip()
+            diagnostics = []
+            diagnostic_pattern = re.compile(
+                r"CircuitSketch\.ino:(\d+)(?::(\d+))?:\s*(?:fatal\s+)?(error|warning):\s*(.*)",
+                re.IGNORECASE,
+            )
+            for match in diagnostic_pattern.finditer(output):
+                diagnostics.append({
+                    "line": int(match.group(1)),
+                    "column": int(match.group(2)) if match.group(2) else None,
+                    "severity": match.group(3).lower(),
+                    "message": match.group(4).strip(),
+                })
+            return {
+                "status": "success" if result.returncode == 0 else "error",
+                "output": output[-12000:] or ("Compilation succeeded." if result.returncode == 0 else "Compiler exited with an error."),
+                "exitCode": result.returncode,
+                "diagnostics": diagnostics,
+            }
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "output": "Compilation exceeded the 45 second limit."}
+    except OSError as error:
+        return {"status": "unavailable", "output": "Could not start Arduino CLI: " + str(error)}
 
 @app.post("/api/generate", response_model=CircuitDesign)
 def generate_circuit_endpoint(req: GenerateRequest):
