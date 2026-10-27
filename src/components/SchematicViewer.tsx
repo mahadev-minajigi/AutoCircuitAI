@@ -32,11 +32,13 @@ const SchematicIcNode = ({ data }: any) => {
   const isSimulating = data.isSimulating;
   const pins: string[] = data.pins || [];
   const name: string = data.name || '';
+  const description: string = data.description || '';
   const category: string = data.category || '';
   const isLed = name.toLowerCase().includes('led') || category.toLowerCase() === 'actuator' && name.toLowerCase().includes('diode');
   const isOled = name.toLowerCase().includes('oled') || name.toLowerCase().includes('display') || name.toLowerCase().includes('ssd1306');
   const isSensor = category === 'Sensor' || name.toLowerCase().includes('bme280') || name.toLowerCase().includes('mpu') || name.toLowerCase().includes('dht');
   const isResistor = name.toLowerCase().includes('resistor');
+  const resistance = name.match(/\d+(?:\.\d+)?\s*(?:k|m)?\s*(?:Ω|ohms?)/i)?.[0].replace(/\s+/g, '') ?? 'R';
 
   return (
     <div className={`schematic-ic-box ${isMCU ? 'schematic-mcu-box' : 'schematic-peripheral-box'} ${isSimulating ? 'sim-active-box' : ''}`}>
@@ -104,8 +106,8 @@ const SchematicIcNode = ({ data }: any) => {
           {/* 4. Resistor Live Series Current Limiting */}
           {isResistor && (
             <div className="live-resistor-box">
-              <div className="resistor-symbol">--[ 4.7kO ]--</div>
-              <div className="resistor-note">I2C pull-up - approximately 0.7mA when LOW</div>
+              <div className="resistor-symbol">--[ {resistance} ]--</div>
+              <div className="resistor-note">{description}</div>
             </div>
           )}
         </div>
@@ -291,12 +293,12 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         id: `wire-${idx}-${mapping.componentId}-${mapping.mcuPin}`,
         source: sourceComponent.id,
         target: mapping.componentId,
-        sourceHandle: `pin-${mapping.mcuPin}`,
+        sourceHandle: `pin-${mapping.sourceComponentPin || mapping.mcuPin}`,
         targetHandle: `pin-${mapping.componentPin}`,
         type: 'smoothstep',
         // Power and ground are static; only signal nets show visual activity.
         animated: isSimulating && !['Power', 'GND'].includes(mapping.protocol),
-        label: `${mapping.mcuPin} → ${mapping.componentPin} · ${mapping.protocol}`,
+        label: `${mapping.sourceComponentId ? `${sourceComponent.name}.${mapping.sourceComponentPin || mapping.mcuPin}` : mapping.mcuPin} → ${mapping.componentPin} · ${mapping.protocol}`,
         labelStyle: { 
           fill: color, 
           fontWeight: 700, 

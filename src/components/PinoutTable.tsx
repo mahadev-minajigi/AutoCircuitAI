@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { CircuitDesign } from '../types/circuit';
-import { Cpu, Search, Copy, Info, AlertCircle } from 'lucide-react';
+import { Cpu, Cable, Search, Copy, Info, AlertCircle } from 'lucide-react';
 
 interface PinoutTableProps {
   design: CircuitDesign;
@@ -30,7 +30,8 @@ const PinoutTable: React.FC<PinoutTableProps> = ({ design, onShowToast }) => {
     const compName = (comp?.name || pin.componentId).toLowerCase();
     const matchesSearch = 
       compName.includes(searchTerm.toLowerCase()) ||
-      pin.mcuPin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (pin.sourceComponentId ? (design.components.find(c => c.id === pin.sourceComponentId)?.name || pin.sourceComponentId).toLowerCase() : pin.mcuPin.toLowerCase()).includes(searchTerm.toLowerCase()) ||
+      (pin.sourceComponentPin || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       pin.componentPin.toLowerCase().includes(searchTerm.toLowerCase()) ||
       pin.description.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -42,7 +43,9 @@ const PinoutTable: React.FC<PinoutTableProps> = ({ design, onShowToast }) => {
   const handleCopyWiringList = () => {
     const text = design.pinMappings.map((p, idx) => {
       const comp = design.components.find(c => c.id === p.componentId);
-      return `${idx + 1}. [${p.protocol}] MCU ${p.mcuPin}  -->  ${comp?.name || p.componentId} Pin "${p.componentPin}" (${p.description})`;
+      const sourceComp = p.sourceComponentId ? design.components.find(c => c.id === p.sourceComponentId) : null;
+      const sourceLabel = sourceComp ? `${sourceComp.name} pin ${p.sourceComponentPin || p.mcuPin}` : `MCU ${p.mcuPin}`;
+      return `${idx + 1}. [${p.protocol}] ${sourceLabel}  -->  ${comp?.name || p.componentId} Pin "${p.componentPin}" (${p.description})`;
     }).join('\n');
 
     navigator.clipboard.writeText(text);
@@ -174,8 +177,8 @@ const PinoutTable: React.FC<PinoutTableProps> = ({ design, onShowToast }) => {
                   </td>
                   <td>
                     <div className="mcu-pin-tag">
-                      <Cpu size={14} />
-                      <code>{pin.mcuPin}</code>
+                      {pin.sourceComponentId ? <Cable size={14} /> : <Cpu size={14} />}
+                      <code>{pin.sourceComponentId ? `${design.components.find(c => c.id === pin.sourceComponentId)?.name || pin.sourceComponentId} pin ${pin.sourceComponentPin || pin.mcuPin}` : pin.mcuPin}</code>
                     </div>
                   </td>
                   <td className="pin-direction">

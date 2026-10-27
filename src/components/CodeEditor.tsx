@@ -97,6 +97,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ design, onShowToast, onClose, o
   const lineGutter = useRef<HTMLDivElement>(null);
   const lines = useMemo(() => source.split('\n').length, [source]);
   const signals = design.pinMappings.filter(mapping => !['Power', 'GND'].includes(mapping.protocol));
+  const libraryDependencies = [...new Set([...source.matchAll(/^\s*#include\s*[<"]([^>"]+)[>"]/gm)]
+    .map(match => match[1])
+    .filter(name => !['Arduino.h', 'Wire.h', 'SPI.h', 'math.h'].includes(name)))];
+  const targetLabel = targets.find(option => option.fqbn === target)?.label ?? 'the matching board';
   const pinCheck = useMemo(() => inspectCircuitPins(source, mcu, design.pinMappings), [source, mcu, design.pinMappings]);
   const diagnostics = useMemo(() => result ? (result.diagnostics ?? parseDiagnostics(result.output)) : [], [result]);
   const errorLines = new Set(diagnostics.filter(item => item.severity === 'error').map(item => item.line));
@@ -104,7 +108,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ design, onShowToast, onClose, o
   useEffect(() => {
     setSource(design.firmwareCode);
     setResult(null);
-  }, [design.id, design.firmwareCode]);
+  }, [design.id]);
 
   const copy = async () => {
     try {
@@ -171,7 +175,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ design, onShowToast, onClose, o
     syncScroll();
   };
 
-  return <main className="firmware-ide" aria-label="Circuit firmware IDE">
+  return <section className="firmware-ide" aria-label="Circuit firmware IDE">
     <header className="ide-topbar">
       <button className="btn-secondary" onClick={onClose}><ArrowLeft size={16} /> Back to circuit</button>
       <div className="ide-title"><Code2 size={19} /><div><strong>Firmware IDE</strong><span>{design.title}</span></div></div>
@@ -193,7 +197,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ design, onShowToast, onClose, o
         <div className="ide-panel-title ide-connections-title"><Cable size={16} /><h2>Mapped signals</h2></div>
         {signals.length ? <ul className="ide-connection-list">{signals.map((mapping, index) => {
           const part = design.components.find(component => component.id === mapping.componentId);
-          return <li key={mapping.componentId + mapping.mcuPin + index}><strong>{mapping.mcuPin}</strong><span>{mapping.protocol}</span><small>{part?.name ?? mapping.componentId} · {mapping.componentPin}</small></li>;
+          const source = mapping.sourceComponentId ? design.components.find(component => component.id === mapping.sourceComponentId) : null;
+          return <li key={mapping.componentId + mapping.mcuPin + index}><strong>{source ? `${source.name} pin ${mapping.sourceComponentPin || mapping.mcuPin}` : mapping.mcuPin}</strong><span>{mapping.protocol}</span><small>{part?.name ?? mapping.componentId} · {mapping.componentPin}</small></li>;
         })}</ul> : <p className="ide-empty-note">No signal mappings in this circuit.</p>}
       </aside>
       <section className="ide-editor-column">
@@ -224,10 +229,18 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ design, onShowToast, onClose, o
           </div>}
           {result && <details className="ide-full-log"><summary>{diagnostics.length ? 'Full compiler log' : 'Compiler output'}</summary><pre>{result.output}</pre></details>}
           {!result && <pre>{compiling ? 'Compiling with the configured Arduino CLI…' : 'Compilation uses the configured Arduino CLI. A button click alone is never reported as a successful build.'}</pre>}
+          {result?.status === 'unavailable' && <div className="ide-local-compile-help">
+            <strong>Local Arduino compiler is not connected</strong>
+            <ol>
+              <li>Remote hosting does not include Arduino CLI. Start AutoCircuit AI on your computer with <code>npm run dev:full</code> to compile through its local backend.</li>
+              <li>Install Arduino CLI and the <b>{targetLabel}</b> board core on that computer. The current deployment cannot compile this sketch.</li>
+              {libraryDependencies.length > 0 && <li>Install these Arduino libraries on the compiler host: <code>{libraryDependencies.join(', ')}</code>.</li>}
+              <li>To compile without the local backend, download the <code>.ino</code>, open it in Arduino IDE, select <b>{targetLabel}</b>, and click <b>Verify</b>.</li>
+            </ol>
+          </div>}
         </section>
       </section>
     </div>
-  </main>;
+  </section>;
 };
 export default CodeEditor;
-

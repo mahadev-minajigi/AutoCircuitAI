@@ -229,7 +229,7 @@ export const templates: Record<string, CircuitDesign> = {
       ],
       testingProcedure: [
         'Connect the ESP32 to your PC via USB cable. Select "ESP32 Dev Module" and correct COM Port in Arduino IDE.',
-        'First run an "I2C Scanner" sketch to confirm both hardware devices respond. You should see address 0x3C (OLED) and 0x76 (BME280).',
+        'Upload the generated sketch and open Serial Monitor at 115200 baud. At startup it scans the I2C bus and prints detected addresses; expect 0x3C/0x3D for OLED and 0x76/0x77 for BME280.',
         'Upload the generated starter firmware sketch from the "Firmware" tab.',
         'Open the Serial Monitor set at 115200 baud rate. Verify sensor readings appear in the terminal and on the OLED.'
       ],
@@ -254,25 +254,63 @@ export const templates: Record<string, CircuitDesign> = {
 Adafruit_BME280 bme;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
+void scanI2CBus() {
+  uint8_t found = 0;
+  Serial.println(F("I2C scan results:"));
+  for (uint8_t address = 1; address < 127; ++address) {
+    Wire.beginTransmission(address);
+    if (Wire.endTransmission() == 0) {
+      Serial.print(F("  0x"));
+      if (address < 16) Serial.print('0');
+      Serial.print(address, HEX);
+      if (address == 0x3C || address == 0x3D) Serial.print(F(" (OLED candidate)"));
+      if (address == 0x76 || address == 0x77) Serial.print(F(" (BME280 candidate)"));
+      Serial.println();
+      ++found;
+    }
+  }
+  if (found == 0) Serial.println(F("No devices found; check power, ground, SDA=GPIO21, SCL=GPIO22."));
+}
+
+uint8_t detectOledAddress() {
+  Wire.beginTransmission(0x3C);
+  if (Wire.endTransmission() == 0) return 0x3C;
+  Wire.beginTransmission(0x3D);
+  if (Wire.endTransmission() == 0) return 0x3D;
+  return 0;
+}
+
 void setup() {
   Serial.begin(115200);
   delay(100);
   Wire.begin(I2C_SDA, I2C_SCL);
+  scanI2CBus();
   
-  // Try default address 0x76, then 0x77
-  if (!bme.begin(0x76, &Wire)) {
-    if (!bme.begin(0x77, &Wire)) {
-      Serial.println(F("Could not find a valid BME280 sensor, check wiring!"));
-    }
+  const uint8_t oledAddress = detectOledAddress();
+  if (oledAddress == 0) {
+    Serial.println(F("OLED not found at I2C address 0x3C or 0x3D"));
+    while (true) delay(1000);
   }
-  
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("SSD1306 allocation failed"));
+  if (!display.begin(SSD1306_SWITCHCAPVCC, oledAddress)) {
+    Serial.println(F("SSD1306 buffer allocation failed"));
+    while (true) delay(1000);
   }
-  
   display.clearDisplay();
-  display.setTextColor(WHITE);
   display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.display();
+
+  // BME280 boards commonly use either address, depending on the SDO strap.
+  if (!bme.begin(0x76, &Wire) && !bme.begin(0x77, &Wire)) {
+    Serial.println(F("BME280 init failed; check wiring and address 0x76/0x77"));
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println(F("BME280 not found"));
+    display.println(F("Check 0x76/0x77"));
+    display.display();
+    while (true) delay(1000);
+  }
+
   display.setCursor(10, 20);
   display.println(F("AutoCircuit AI"));
   display.setCursor(10, 35);
@@ -286,19 +324,35 @@ void loop() {
   float hum = bme.readHumidity();
   float press = bme.readPressure() / 100.0F;
 
+  if (isnan(temp) || isnan(hum) || isnan(press)) {
+    Serial.println(F("BME280 read failed; check sensor wiring and power."));
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println(F("Sensor read error"));
+    display.println(F("Check BME280"));
+    display.display();
+    delay(2000);
+    return;
+  }
+
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.setTextSize(1);
   display.println(F("--- IoT Weather ---"));
   
   display.setCursor(0, 18);
-  display.printf("Temp: %.1f C\\n", temp);
+  display.print(F("Temp: "));
+  display.print(temp, 1);
+  display.println(F(" C"));
   
   display.setCursor(0, 32);
-  display.printf("Hum:  %.1f %%\\n", hum);
+  display.print(F("Hum:  "));
+  display.print(hum, 1);
+  display.println(F(" %"));
   
   display.setCursor(0, 46);
-  display.printf("Pres: %.0f hPa\\n", press);
+  display.print(F("Pres: "));
+  display.print(press, 0);
+  display.println(F(" hPa"));
   
   display.display();
   delay(2000);
@@ -604,6 +658,42 @@ void loop() {
 }`,
     warnings: ['Use a clean 3.3V or 5V rail to prevent audio popping and noise.']
   }
+};
+
+export const buttonLedTemplate: CircuitDesign = {
+  id: 'arduino-uno-button-led',
+  title: 'Arduino Uno Pushbutton LED',
+  description: 'Press a pushbutton to light an LED. D7 reads the button through a 10kΩ pull-down, and D13 drives the LED through a 220Ω current-limiting resistor.',
+  components: [
+    { id: 'u1', name: 'Arduino Uno R3', description: '5V microcontroller board with digital pins D7 and D13.', category: 'MCU', package: 'Dev board', estimatedCost: 600, pins: ['5V', 'GND', 'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11', 'D12', 'D13', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5'], operatingVoltage: 5, maxCurrent_mA: 50 },
+    { id: 'sw1', name: '4-pin tactile pushbutton', description: 'Momentary normally-open switch. Pins 1 and 2 form one side; pins 3 and 4 form the opposite side. Rotate across the breadboard center trench.', category: 'Actuator', package: 'Through-hole tactile switch', estimatedCost: 10, pins: ['1', '2', '3', '4'], operatingVoltage: 5, maxCurrent_mA: 1 },
+    { id: 'r_pd', name: '10kΩ button pull-down resistor', description: 'Holds D7 LOW while the button is released; connects the D7/button node to GND.', category: 'Passive', package: 'Axial resistor', estimatedCost: 2, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 0.5 },
+    { id: 'd1', name: 'Indicator LED', description: 'Anode connects to D13 through a 220Ω series resistor. Cathode connects to GND.', category: 'Actuator', package: '5mm LED', estimatedCost: 3, pins: ['ANODE', 'CATHODE'], operatingVoltage: 2, maxCurrent_mA: 10 },
+    { id: 'r_led', name: '220Ω LED current-limiting resistor', description: 'Series resistor between Arduino D13 and the LED anode.', category: 'Passive', package: 'Axial resistor', estimatedCost: 2, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 10 }
+  ],
+  pinMappings: [
+    { mcuPin: '5V', componentId: 'sw1', componentPin: '1', protocol: 'Power', description: 'One switch side: tactile-button pins 1 and 2 are internally common.', wireColor: '#d34545' },
+    { mcuPin: 'D7', componentId: 'sw1', componentPin: '3', protocol: 'GPIO', description: 'Button output side: pins 3 and 4 are internally common; this node goes to D7.', wireColor: '#39866a' },
+    { mcuPin: 'D7', componentId: 'r_pd', componentPin: '1', protocol: 'GPIO', description: 'Pull-down top shares the D7/button output node.', wireColor: '#39866a' },
+    { mcuPin: 'GND', componentId: 'r_pd', componentPin: '2', protocol: 'GND', description: '10kΩ pull-down returns to ground.', wireColor: '#536b8b' },
+    { mcuPin: 'D13', componentId: 'r_led', componentPin: '1', protocol: 'GPIO', description: 'LED output through series current-limiting resistor.', wireColor: '#087e8b' },
+    { mcuPin: 'D13', sourceComponentId: 'r_led', sourceComponentPin: '2', componentId: 'd1', componentPin: 'ANODE', protocol: 'GPIO', description: 'LED anode connects to resistor terminal 2; terminal 1 connects to Arduino D13.', wireColor: '#087e8b' },
+    { mcuPin: 'GND', componentId: 'd1', componentPin: 'CATHODE', protocol: 'GND', description: 'LED cathode returns to GND for active-HIGH operation.', wireColor: '#536b8b' }
+  ],
+  labGuide: {
+    voltageSupplyNote: 'Use the Uno 5V pin only for the low-current button input. The LED must have a series resistor; never connect it directly between an I/O pin and ground.',
+    prerequisites: ['Arduino Uno R3 and USB cable', '4-pin normally-open tactile pushbutton', 'LED (observe anode/cathode polarity)', '220Ω LED series resistor', '10kΩ button pull-down resistor', 'Breadboard and jumper wires'],
+    breadboardWiringSteps: [
+      { stepNumber: 1, title: 'Place the button across the trench', instruction: 'Place the 4-pin tactile switch across the breadboard center gap. Pins 1 and 2 are one internally connected side; pins 3 and 4 are the other side. Check the switch datasheet or use a continuity meter if its pin orientation differs.', caution: 'Do not place both switch sides in the same connected breadboard row.' },
+      { stepNumber: 2, title: 'Wire the active-HIGH button input', instruction: 'Connect button pin 1 (or pin 2 on the same side) to Uno 5V. Connect the opposite side (pin 3 or pin 4) to Uno D7. Connect one end of the 10kΩ resistor to that same D7/button-output row and the other end to Uno GND.' },
+      { stepNumber: 3, title: 'Wire the LED output', instruction: 'Connect Uno D13 through the 220Ω series resistor to the LED anode (long lead). Connect the LED cathode (short lead/flat edge) to Uno GND.' },
+      { stepNumber: 4, title: 'Check wiring before USB power', instruction: 'With the button released, D7 is held LOW through 10kΩ. Pressing the button connects D7 to 5V. The LED current path is D13 → 220Ω → LED anode → LED cathode → GND.' }
+    ],
+    testingProcedure: ['Upload the generated sketch to Arduino Uno.', 'With the button released, confirm the LED is off.', 'Press and hold the button; the LED should turn on. Release it; the LED should turn off.'],
+    troubleshootingTips: ['LED always on: check that the button output node is not directly wired to 5V; only the opposite switch side goes to 5V.', 'LED does not light: verify anode/cathode orientation and the 220Ω series resistor path.', 'Button reads randomly: verify the 10kΩ pull-down runs from D7 to GND and the switch straddles the center trench.']
+  },
+  firmwareCode: `const int buttonPin = 7;\nconst int ledPin = 13;\n\nvoid setup() {\n  pinMode(buttonPin, INPUT);  // External 10kΩ pull-down to GND\n  pinMode(ledPin, OUTPUT);\n  digitalWrite(ledPin, LOW);\n}\n\nvoid loop() {\n  const bool pressed = digitalRead(buttonPin) == HIGH;\n  digitalWrite(ledPin, pressed ? HIGH : LOW);\n}`,
+  warnings: ['External 10kΩ pull-down is required with INPUT mode. Button sides must be identified correctly; pins 1/2 and 3/4 are each internally common.']
 };
 
 export const motorControllerTemplate: CircuitDesign = {

@@ -82,14 +82,15 @@ The schematic should show four separate SPI routes: SCK, MISO, MOSI, and CS. The
 
 ## How Prompt Routing Works
 
-The current prototype uses deterministic template routing rather than a remote AI service:
+The generator first uses the configured Gemini service for custom requests. Without a Gemini key, it uses validated local examples for supported prompt types:
 
-- Prompts containing `stm32` or `drone` use the STM32F405 and MPU6000 template.
-- Prompts containing `pico`, `rp2040`, or `synth` use the RP2040 audio template.
-- Other prompts use the ESP32 weather-station template.
-- Adding `motor` adds an L298N motor-driver component to the selected design.
+- Prompts containing `stm32`, `drone`, or `flight` use the STM32F405 flight-controller template.
+- Prompts containing `pico`, `rp2040`, `synth`, or `audio` use the RP2040 audio template.
+- Weather, BME280, temperature, humidity, pressure, or OLED prompts use the ESP32 weather-station template.
+- Arduino Uno pushbutton/LED prompts use the button-and-LED circuit; Arduino Uno blink/LED prompts use a dedicated LED circuit.
+- Arduino Uno motor prompts use the motor-controller template.
 
-This deterministic approach makes the first-review demo repeatable and easy to validate. A future version can replace keyword routing with an actual LLM and structured hardware schema validation.
+The IDE uses the returned design as its single source for the circuit visualization, component list, pin mapping, DRC results, and firmware editor. If a prompt does not match a supported template and Gemini is unavailable, the app marks the chosen template as a starting point instead of presenting it as a prompt-matched circuit. Always verify a generated design before building hardware.
 
 ## Project Structure
 
@@ -121,12 +122,33 @@ src/
 
 ## Run Locally
 
+Install the frontend and Python backend dependencies once:
+
 ```bash
 npm install
-npm run dev
+python -m pip install -r requirements.txt
 ```
 
-Open the Vite URL shown in the terminal. Generate a design, then inspect the Schematic, DRC Report, Pin Mapping, BOM, Firmware, and PCB Preview tabs.
+Start both services together:
+
+```bash
+npm run dev:full
+```
+
+Open the Vite URL shown in the terminal. The frontend runs on Vite and proxies `/api` requests to FastAPI on `http://127.0.0.1:8000`. Check backend availability at `http://127.0.0.1:8000/api/health`. To use Gemini locally, put `GEMINI_API_KEY=...` in the ignored `.env` file; template generation still works without a key.
+
+For local firmware compilation, install [Arduino CLI](https://docs.arduino.cc/arduino-cli/installation/) for Windows and make sure its installation folder is on `PATH`. Close and reopen PowerShell after installing it, then verify `arduino-cli version`. Install the board cores used by the selected target:
+
+```powershell
+arduino-cli core update-index
+arduino-cli core install arduino:avr
+arduino-cli core install esp32:esp32
+arduino-cli core install rp2040:rp2040
+```
+
+Install sketch libraries with `arduino-cli lib install "Adafruit BME280 Library" "Adafruit Unified Sensor" "Adafruit GFX Library" "Adafruit SSD1306"`. Keep `npm run dev:full` running; the IDE Compile action then sends the sketch to this local compiler. The public serverless deployment may report compilation unavailable if Arduino CLI or its board core is not installed there; it never claims an unrun compile succeeded.
+
+Alternatively, run `npm run dev` and `npm run dev:backend` in separate terminals.
 
 ## Build and Validate
 

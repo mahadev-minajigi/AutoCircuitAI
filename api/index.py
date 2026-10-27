@@ -46,6 +46,7 @@ class PinMapping(BaseModel):
     componentId: str
     componentPin: str
     sourceComponentId: Optional[str] = None
+    sourceComponentPin: Optional[str] = None
     protocol: Literal['GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'Power', 'GND', 'I2S']
     description: str
 
@@ -115,8 +116,8 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
         target = component_by_id.get(mapping.componentId)
         if not source or not target:
             invalid_mappings.append(f"{mapping.mcuPin} to {mapping.componentId}.{mapping.componentPin} (missing component)")
-        elif mapping.mcuPin not in source.pins or mapping.componentPin not in target.pins:
-            invalid_mappings.append(f"{source.name}.{mapping.mcuPin} to {target.name}.{mapping.componentPin}")
+        elif (mapping.sourceComponentPin or mapping.mcuPin) not in source.pins or mapping.componentPin not in target.pins:
+            invalid_mappings.append(f"{source.name}.{mapping.sourceComponentPin or mapping.mcuPin} to {target.name}.{mapping.componentPin}")
     if invalid_mappings:
         rules.append(DrcRule(
             type="Error",
@@ -140,7 +141,7 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
         if comp.id == mcu.id:
             continue
         mapped_pins = {m.componentPin for m in design.pinMappings if m.componentId == comp.id}
-        mapped_pins.update(m.mcuPin for m in design.pinMappings if m.sourceComponentId == comp.id)
+        mapped_pins.update(m.sourceComponentPin or m.mcuPin for m in design.pinMappings if m.sourceComponentId == comp.id)
         # Module pins not used by this design are usually optional. Only flag
         # pins whose metadata explicitly says they must be connected.
         unmapped = [
@@ -257,20 +258,60 @@ TEMPLATES = {
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 Adafruit_BME280 bme;
 
+void scanI2CBus() {
+  uint8_t found = 0;
+  Serial.println("I2C scan results:");
+  for (uint8_t address = 1; address < 127; ++address) {
+    Wire.beginTransmission(address);
+    if (Wire.endTransmission() == 0) {
+      Serial.print("  0x");
+      if (address < 16) Serial.print('0');
+      Serial.print(address, HEX);
+      if (address == 0x3C || address == 0x3D) Serial.print(" (OLED candidate)");
+      if (address == 0x76 || address == 0x77) Serial.print(" (BME280 candidate)");
+      Serial.println();
+      ++found;
+    }
+  }
+  if (found == 0) Serial.println("No devices found; check power, ground, SDA=GPIO21, SCL=GPIO22.");
+}
+
+uint8_t detectOledAddress() {
+  Wire.beginTransmission(0x3C);
+  if (Wire.endTransmission() == 0) return 0x3C;
+  Wire.beginTransmission(0x3D);
+  if (Wire.endTransmission() == 0) return 0x3D;
+  return 0;
+}
+
 void setup() {
   Serial.begin(115200);
   Wire.begin(21, 22);
+  scanI2CBus();
 
-  if(!bme.begin(0x76, &Wire)) {
-    Serial.println("Could not find a valid BME280 sensor!");
+  const uint8_t oledAddress = detectOledAddress();
+  if (oledAddress == 0) {
+    Serial.println("OLED not found at I2C address 0x3C or 0x3D");
+    while (true) delay(1000);
   }
-
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println("SSD1306 allocation failed");
+  if (!display.begin(SSD1306_SWITCHCAPVCC, oledAddress)) {
+    Serial.println("SSD1306 buffer allocation failed");
+    while (true) delay(1000);
   }
-
   display.clearDisplay();
-  display.setTextColor(WHITE);
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.display();
+
+  if (!bme.begin(0x76, &Wire) && !bme.begin(0x77, &Wire)) {
+    Serial.println("BME280 init failed; check wiring and address 0x76/0x77");
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("BME280 not found");
+    display.println("Check 0x76/0x77");
+    display.display();
+    while (true) delay(1000);
+  }
 }
 
 void loop() {
@@ -278,11 +319,28 @@ void loop() {
   float hum = bme.readHumidity();
   float press = bme.readPressure() / 100.0F;
 
+  if (isnan(temp) || isnan(hum) || isnan(press)) {
+    Serial.println("BME280 read failed; check sensor wiring and power.");
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Sensor read error");
+    display.println("Check BME280");
+    display.display();
+    delay(2000);
+    return;
+  }
+
   display.clearDisplay();
-  display.setCursor(0,0);
-  display.printf("Temp: %.1f C\\n", temp);
-  display.printf("Hum:  %.1f %%\\n", hum);
-  display.printf("Pres: %.0f hPa\\n", press);
+  display.setCursor(0, 0);
+  display.print("Temp: ");
+  display.print(temp, 1);
+  display.println(" C");
+  display.print("Hum:  ");
+  display.print(hum, 1);
+  display.println(" %");
+  display.print("Pres: ");
+  display.print(press, 0);
+  display.println(" hPa");
   display.display();
 
   delay(2000);
@@ -400,7 +458,9 @@ CRITICAL ELECTRICAL RULES:
 2. ESP32 typical current is ~240mA (350mA peak WiFi TX). Sensors like BME280 draw ~1mA, OLED displays draw ~20mA.
 3. Every design MUST include exactly one MCU, correct power/GND connections, realistic pin numbers, and valid firmware.
 4. For I2C buses, include a separate 4.7kΩ pull-up on SDA and SCL to the MCU logic rail unless the selected modules explicitly include pull-ups. Add 100nF bypass capacitors across supply and ground at each MCU and IC; note physical placement within 10mm is a build instruction, not something proven by this JSON.
-5. Never claim a component is connected unless its pins are included in pinMappings."""
+5. For display firmware, set a visible text size and the library's explicit white color before drawing, then call display() after clearDisplay() so buffer changes reach the panel.
+6. Check every sensor/display begin() result. For BME280, try 0x76 and 0x77; if initialization fails, print a useful Serial error, show an error on an initialized display if possible, and stop normal sensor reads.
+7. Never claim a component is connected unless its pins are included in pinMappings."""
 
         # Use gemini-2.5-flash-lite which is active and highly responsive
         model_name = 'gemini-2.5-flash-lite'
@@ -479,6 +539,77 @@ def ensure_design_support_parts(design: CircuitDesign) -> None:
 
 # ----------------- Endpoints -----------------
 
+def make_button_led_design(prompt: str) -> CircuitDesign:
+    components = [
+        Component(id="u1", name="Arduino Uno R3", description="5V microcontroller board with digital pins D7 and D13.", category="MCU", package="Dev board", estimatedCost=600, pins=["5V", "GND", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "A0", "A1", "A2", "A3", "A4", "A5"], operatingVoltage=5, maxCurrent_mA=50),
+        Component(id="sw1", name="4-pin tactile pushbutton", description="Momentary normally-open switch. Pins 1/2 form one side; pins 3/4 form the opposite side. Place across the breadboard trench.", category="Actuator", package="Through-hole tactile switch", estimatedCost=10, pins=["1", "2", "3", "4"], operatingVoltage=5, maxCurrent_mA=1),
+        Component(id="r_pd", name="10kΩ button pull-down resistor", description="Holds D7 LOW while released; connects the button output node to GND.", category="Passive", package="Axial resistor", estimatedCost=2, pins=["1", "2"], operatingVoltage=5, maxCurrent_mA=0.5),
+        Component(id="d1", name="Indicator LED", description="Anode connects to D13 through a 220Ω series resistor; cathode connects to GND.", category="Actuator", package="5mm LED", estimatedCost=3, pins=["ANODE", "CATHODE"], operatingVoltage=2, maxCurrent_mA=10),
+        Component(id="r_led", name="220Ω LED current-limiting resistor", description="Series resistor from Arduino D13 to LED anode.", category="Passive", package="Axial resistor", estimatedCost=2, pins=["1", "2"], operatingVoltage=5, maxCurrent_mA=10),
+    ]
+    mappings = [
+        PinMapping(mcuPin="5V", componentId="sw1", componentPin="1", protocol="Power", description="Switch supply side; button pins 1/2 are internally common."),
+        PinMapping(mcuPin="D7", componentId="sw1", componentPin="3", protocol="GPIO", description="Button output side; pins 3/4 are internally common."),
+        PinMapping(mcuPin="D7", componentId="r_pd", componentPin="1", protocol="GPIO", description="Pull-down connects to the same D7/button output node."),
+        PinMapping(mcuPin="GND", componentId="r_pd", componentPin="2", protocol="GND", description="10kΩ pull-down returns to ground."),
+        PinMapping(mcuPin="D13", componentId="r_led", componentPin="1", protocol="GPIO", description="D13 drives LED through the series resistor."),
+        PinMapping(mcuPin="D13", sourceComponentId="r_led", sourceComponentPin="2", componentId="d1", componentPin="ANODE", protocol="GPIO", description="LED anode connects to resistor terminal 2; terminal 1 connects to Arduino D13."),
+        PinMapping(mcuPin="GND", componentId="d1", componentPin="CATHODE", protocol="GND", description="LED cathode returns to GND for active-HIGH operation."),
+    ]
+    design = CircuitDesign(
+        id=f"button-led-{uuid.uuid4().hex[:8]}",
+        title="Arduino Uno Pushbutton LED",
+        description=f"Press a pushbutton to light an LED. D7 reads the button through a 10kΩ pull-down; D13 drives the LED through a 220Ω current-limiting resistor. Requested project: {prompt}",
+        components=components,
+        pinMappings=mappings,
+        firmwareCode="""const int buttonPin = 7;
+const int ledPin = 13;
+
+void setup() {
+  pinMode(buttonPin, INPUT);  // External 10kΩ pull-down to GND
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+}
+
+void loop() {
+  const bool pressed = digitalRead(buttonPin) == HIGH;
+  digitalWrite(ledPin, pressed ? HIGH : LOW);
+}""",
+        warnings=["External 10kΩ pull-down is required with INPUT mode. Identify the switch's internally connected pin pairs and place it across the breadboard trench."],
+    )
+    design.drcReport = run_drc(design)
+    return design
+
+def make_blink_led_design(prompt: str) -> CircuitDesign:
+    button_design = make_button_led_design(prompt)
+    included_ids = {"u1", "d1", "r_led"}
+    design = CircuitDesign(
+        id=f"arduino-blink-{uuid.uuid4().hex[:8]}",
+        title="Arduino Uno Blinking LED",
+        description=f"Blink an LED from Arduino Uno digital pin 13 through a 220Ω current-limiting resistor. Requested project: {prompt}",
+        components=[component for component in button_design.components if component.id in included_ids],
+        pinMappings=[
+            mapping for mapping in button_design.pinMappings
+            if mapping.componentId in included_ids
+            and (not mapping.sourceComponentId or mapping.sourceComponentId in included_ids)
+        ],
+        firmwareCode="""const int ledPin = 13;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(ledPin, HIGH);
+  delay(1000);
+  digitalWrite(ledPin, LOW);
+  delay(1000);
+}""",
+        warnings=["Use the 220Ω series resistor between D13 and the LED anode."],
+    )
+    design.drcReport = run_drc(design)
+    return design
+
 @app.get("/")
 def read_root():
     return {
@@ -516,18 +647,86 @@ def compile_firmware(req: CompileRequest):
         return {"status": "error", "output": "Sketch must contain code and be smaller than 60 KB."}
 
     cli = shutil.which("arduino-cli")
+    if not cli and os.name == "nt":
+        local_app_data = os.getenv("LOCALAPPDATA")
+        if local_app_data:
+            candidate = os.path.join(local_app_data, "Programs", "Arduino CLI", "arduino-cli.exe")
+            if os.path.isfile(candidate):
+                cli = candidate
     if not cli:
         return {
             "status": "unavailable",
-            "output": "Arduino CLI is not installed in this deployment, so compilation was not run. Install arduino-cli and the selected board core to enable real builds."
+            "output": "Arduino CLI is not installed or not on PATH for this API host. No compile was run. Install Arduino CLI, reopen the terminal, and install the selected board core; until then, compile the downloaded sketch in Arduino IDE."
         }
 
     try:
+        core_by_fqbn = {
+            "arduino:avr:uno": "arduino:avr",
+            "esp32:esp32:esp32": "esp32:esp32",
+            "rp2040:rp2040:rpipico": "rp2040:rp2040",
+        }
+        core = core_by_fqbn[req.fqbn]
+        installed_cores = subprocess.run(
+            [cli, "core", "list", "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if installed_cores.returncode != 0:
+            return {
+                "status": "unavailable",
+                "output": (installed_cores.stderr or installed_cores.stdout or "Could not query installed Arduino board cores.")[-4000:],
+            }
+        try:
+            core_data = json.loads(installed_cores.stdout or "[]")
+            core_rows = core_data.get("platforms", []) if isinstance(core_data, dict) else core_data
+        except json.JSONDecodeError:
+            core_rows = []
+        core_ids = {row.get("ID") or row.get("id") for row in core_rows if isinstance(row, dict)}
+        if core not in core_ids:
+            return {
+                "status": "unavailable",
+                "output": f"Arduino CLI is installed, but board core '{core}' is missing on this host. Install it with: arduino-cli core install {core}",
+            }
+
         with tempfile.TemporaryDirectory(prefix="autocircuit-compile-") as temp_dir:
             sketch_dir = os.path.join(temp_dir, "CircuitSketch")
             os.makedirs(sketch_dir, exist_ok=True)
             with open(os.path.join(sketch_dir, "CircuitSketch.ino"), "w", encoding="utf-8") as sketch_file:
                 sketch_file.write(req.source)
+            library_headers = sorted(set(re.findall(
+                r"^\s*#include\s*[<\"]([^>\"]+)[>\"]",
+                req.source,
+                re.MULTILINE,
+            )))
+            builtin_headers = {"Arduino.h", "Wire.h", "SPI.h", "math.h"}
+            missing_libraries = [header for header in library_headers if header not in builtin_headers]
+            installed_libraries = subprocess.run(
+                [cli, "lib", "list", "--format", "json"],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            if installed_libraries.returncode == 0:
+                try:
+                    library_rows = json.loads(installed_libraries.stdout or "[]")
+                    installed_names = {row.get("name") for row in library_rows if isinstance(row, dict)}
+                except json.JSONDecodeError:
+                    installed_names = set()
+                library_hints = {
+                    "Adafruit_Sensor.h": "Adafruit Unified Sensor",
+                    "Adafruit_BME280.h": "Adafruit BME280 Library",
+                    "Adafruit_GFX.h": "Adafruit GFX Library",
+                    "Adafruit_SSD1306.h": "Adafruit SSD1306",
+                }
+                missing_names = sorted({library_hints.get(header, header) for header in missing_libraries} - installed_names)
+                if missing_names:
+                    return {
+                        "status": "unavailable",
+                        "output": "Required Arduino libraries are missing on the compiler host: " + ", ".join(missing_names) + ". Install them with: arduino-cli lib install " + " ".join('"' + name + '"' for name in missing_names),
+                    }
             result = subprocess.run(
                 [cli, "compile", "--fqbn", req.fqbn, "--warnings", "all", sketch_dir],
                 capture_output=True,
@@ -562,6 +761,11 @@ def compile_firmware(req: CompileRequest):
 
 @app.post("/api/generate", response_model=CircuitDesign)
 def generate_circuit_endpoint(req: GenerateRequest):
+    if re.search(r"\b(?:push[ -]?button|button)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:blink|led)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
+        return make_button_led_design(req.prompt)
+    if re.search(r"\b(?:blink|flash)\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
+        return make_blink_led_design(req.prompt)
+
     # 1. Preset check
     if req.preset and req.preset in TEMPLATES:
         template = TEMPLATES[req.preset]
@@ -579,26 +783,18 @@ def generate_circuit_endpoint(req: GenerateRequest):
     # 3. Intelligent fallback synthesis based on keywords
     prompt_lower = req.prompt.lower()
     base_key = "esp32-weather"
-    if "drone" in prompt_lower or "stm32" in prompt_lower or "flight" in prompt_lower:
+    supported_match = True
+    if any(term in prompt_lower for term in ("drone", "stm32", "flight")):
         base_key = "stm32-drone"
-    elif "synth" in prompt_lower or "pico" in prompt_lower or "audio" in prompt_lower or "rp2040" in prompt_lower:
+    elif any(term in prompt_lower for term in ("synth", "pico", "audio", "rp2040")):
         base_key = "rpi-pico-synth"
+    elif any(term in prompt_lower for term in ("bme280", "weather", "temperature", "humidity", "pressure", "oled", "ssd1306")):
+        base_key = "esp32-weather"
+    else:
+        supported_match = False
 
     base = TEMPLATES[base_key].copy()
     components = [c.copy() for c in base["components"]]
-    
-    if "motor" in prompt_lower:
-        components.append({
-            "id": "act1",
-            "name": "L298N Dual Motor Driver",
-            "description": "High-power dual H-bridge motor driver module",
-            "category": "Actuator",
-            "package": "Module",
-            "estimatedCost": 350.0,
-            "pins": ["ENA", "IN1", "IN2", "IN3", "IN4", "ENB", "OUT1", "OUT2"],
-            "operatingVoltage": 12.0,
-            "maxCurrent_mA": 2000.0
-        })
 
     generated = CircuitDesign(
         id=f"ai-{uuid.uuid4().hex[:8]}",
@@ -607,7 +803,11 @@ def generate_circuit_endpoint(req: GenerateRequest):
         components=[Component(**c) for c in components],
         pinMappings=[PinMapping(**p) for p in base["pinMappings"]],
         firmwareCode=base["firmwareCode"],
-        warnings=["Synthesized design via rule-based electrical solver. Verify DRC report before prototyping."]
+        warnings=(
+            ["Template-matched circuit generated for this supported request. Verify the DRC report before prototyping."]
+            if supported_match else
+            [f"This request could not be matched to a validated local circuit template. The displayed {base['title']} design is only a starting point and may not meet the prompt. Configure the AI backend for custom circuit synthesis."]
+        )
     )
     generated.drcReport = run_drc(generated)
     return generated

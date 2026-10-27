@@ -1,0 +1,32 @@
+.circuit-3d-viewer { display:flex; min-width:0; flex-direction:column; gap:0; }
+.circuit-3d-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:2px 2px 10px; }
+.circuit-3d-heading h2 { margin:4px 0; color:var(--text-main); font-size:.98rem; line-height:1.35; }
+.circuit-3d-heading p { color:var(--text-muted); font-size:.68rem; }
+.circuit-3d-component-count { display:flex; align-items:center; gap:5px; padding:6px 8px; border:1px solid var(--border-color); border-radius:999px; color:var(--text-muted); font-size:.65rem; white-space:nowrap; }
+.circuit-3d-component-count strong { color:var(--accent-cyan); }
+.circuit-3d-component-count i { width:3px; height:3px; margin:0 3px; border-radius:50%; background:var(--text-muted); }
+.circuit-3d-stage { position:relative; height:480px; min-height:400px; overflow:hidden; border:1px solid #d5e0df; border-radius:12px; background:#edf4f2; }
+.circuit-3d-canvas { position:absolute; inset:0; width:100%; height:100%; }
+.circuit-3d-stage canvas { display:block; width:100%; height:100%; cursor:grab; touch-action:none; outline:none; }
+.circuit-3d-stage canvas:active { cursor:grabbing; }
+.circuit-3d-stage canvas:focus-visible { box-shadow:inset 0 0 0 2px var(--accent-cyan); }
+.circuit-3d-error { position:absolute; inset:16px; z-index:3; display:grid; place-items:center; padding:24px; border:1px solid #e8c1be; border-radius:10px; background:rgba(255,247,246,.96); color:#a74640; font-size:.82rem; line-height:1.55; text-align:center; }
+.circuit-3d-controls { position:absolute; z-index:2; bottom:11px; left:50%; display:flex; align-items:center; padding:4px; transform:translateX(-50%); border:1px solid #cfdbd9; border-radius:10px; background:rgba(255,255,255,.94); box-shadow:0 4px 14px rgba(37,60,67,.12); }
+.circuit-3d-controls button { display:grid; width:38px; height:34px; place-items:center; border:0; border-right:1px solid #e0e8e6; background:transparent; color:#526773; cursor:pointer; }
+.circuit-3d-controls button:last-child { border:0; }
+.circuit-3d-controls button:hover,.circuit-3d-controls button.selected { border-radius:6px; background:#e4f3ef; color:#168477; }
+.circuit-3d-controls button.powered { color:#148774; }
+.circuit-3d-tip { position:absolute; right:10px; bottom:15px; padding:6px 8px; border:1px solid #d4dfdd; border-radius:6px; background:rgba(255,255,255,.9); color:#63777a; font-size:.61rem; pointer-events:none; }
+.circuit-3d-tip span { margin-right:4px; color:#278a7d; font-weight:800; }
+.circuit-3d-legend { display:flex; align-items:center; gap:8px 12px; flex-wrap:wrap; padding:9px 3px 0; }
+.circuit-3d-legend > span { display:flex; align-items:center; gap:4px; color:#647582; font-size:.59rem; }
+.circuit-3d-legend i { width:8px; height:8px; border-radius:50%; }
+.circuit-3d-legend small { flex:1 1 100%; color:#88949b; font-size:.6rem; line-height:1.4; }
+.circuit-3d-empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--text-muted); font-size:.85rem; pointer-events:none; }
+
+@media(max-width:680px) {
+  .circuit-3d-heading { align-items:flex-start; flex-direction:column; }
+  .circuit-3d-stage { height:400px; min-height:350px; }
+  .circuit-3d-controls button { width:34px; }
+  .circuit-3d-tip { right:6px; bottom:55px; }
+}

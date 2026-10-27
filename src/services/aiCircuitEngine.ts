@@ -1,5 +1,5 @@
 import type { CircuitDesign, DrcRule } from '../types/circuit';
-import { motorControllerTemplate, templates } from '../data/circuitTemplates';
+import { buttonLedTemplate, motorControllerTemplate, templates } from '../data/circuitTemplates';
 
 export function runDRC(design: CircuitDesign): DrcRule[] {
   const rules: DrcRule[] = [];
@@ -39,8 +39,9 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
       invalidMappings.push(`${mapping.mcuPin} → ${mapping.componentId}.${mapping.componentPin} (missing component)`);
       return;
     }
-    if (!target.pins.includes(mapping.componentPin) || !source.pins.includes(mapping.mcuPin)) {
-      invalidMappings.push(`${source.name}.${mapping.mcuPin} → ${target.name}.${mapping.componentPin}`);
+    const sourcePin = mapping.sourceComponentPin || mapping.mcuPin;
+    if (!target.pins.includes(mapping.componentPin) || !source.pins.includes(sourcePin)) {
+      invalidMappings.push(`${source.name}.${sourcePin} → ${target.name}.${mapping.componentPin}`);
     }
   });
   if (invalidMappings.length > 0) {
@@ -104,7 +105,7 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
     const mappedPins = new Set<string>();
     design.pinMappings.forEach(mapping => {
       if (mapping.componentId === comp.id) mappedPins.add(mapping.componentPin);
-      if (mapping.sourceComponentId === comp.id) mappedPins.add(mapping.mcuPin);
+      if (mapping.sourceComponentId === comp.id) mappedPins.add(mapping.sourceComponentPin || mapping.mcuPin);
     });
     const requiredPins = comp.pins.filter(pin => {
       const description = comp.pinDescriptions?.[pin] || '';
@@ -160,9 +161,10 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
   const shortCheck = design.pinMappings.some(mapping => {
     const source = mapping.sourceComponentId ? design.components.find(component => component.id === mapping.sourceComponentId) : mcu;
     const target = design.components.find(component => component.id === mapping.componentId);
-    const sourceGround = /^(gnd|ground)$/i.test(mapping.mcuPin);
+    const sourcePin = mapping.sourceComponentPin || mapping.mcuPin;
+    const sourceGround = /^(gnd|ground)$/i.test(sourcePin);
     const targetGround = /^(gnd|ground)$/i.test(mapping.componentPin);
-    const sourcePower = /^(vcc|vin|vout|3v3|5v|5v0)$/i.test(mapping.mcuPin);
+    const sourcePower = /^(vcc|vin|vout|3v3|5v|5v0)$/i.test(sourcePin);
     const targetPower = /^(vcc|vin|vout|3v3|5v|5v0)$/i.test(mapping.componentPin);
     return !!source && !!target && ((sourceGround && targetPower) || (sourcePower && targetGround));
   });
@@ -224,6 +226,15 @@ export function generateKiCadNetlist(design: CircuitDesign): string {
   const netMap = new Map<string, { name: string; nodes: { ref: string; pin: string }[] }>();
 
   design.pinMappings.forEach((mapping) => {
+    if (mapping.sourceComponentId && mapping.sourceComponentPin) {
+      const netName = `Net-${mapping.sourceComponentId}_${mapping.sourceComponentPin}`;
+      if (!netMap.has(netName)) netMap.set(netName, { name: netName, nodes: [] });
+      netMap.get(netName)!.nodes.push(
+        { ref: mapping.sourceComponentId, pin: mapping.sourceComponentPin },
+        { ref: mapping.componentId, pin: mapping.componentPin }
+      );
+      return;
+    }
     const netName = mapping.protocol === 'Power' ? 'VCC' : mapping.protocol === 'GND' ? 'GND' : `Net-${mapping.protocol}_${mapping.mcuPin}`;
     if (!netMap.has(netName)) {
       netMap.set(netName, {
@@ -268,13 +279,54 @@ export function generateEasyEdaJson(design: CircuitDesign): object {
   };
 }
 
+function makeBlinkLedDesign(prompt: string): CircuitDesign {
+  const components = buttonLedTemplate.components.filter(component => ['u1', 'd1', 'r_led'].includes(component.id));
+  const pinMappings = buttonLedTemplate.pinMappings.filter(mapping =>
+    ['d1', 'r_led'].includes(mapping.componentId) &&
+    (!mapping.sourceComponentId || ['d1', 'r_led'].includes(mapping.sourceComponentId))
+  );
+  const design: CircuitDesign = {
+    ...buttonLedTemplate,
+    id: `arduino-blink-${Math.random().toString(36).slice(2, 9)}`,
+    title: 'Arduino Uno Blinking LED',
+    description: `Blink an LED from Arduino Uno digital pin 13 through a 220Ω current-limiting resistor. Requested project: ${prompt}`,
+    components,
+    pinMappings,
+    firmwareCode: `const int ledPin = 13;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(ledPin, HIGH);
+  delay(1000);
+  digitalWrite(ledPin, LOW);
+  delay(1000);
+}`,
+    warnings: ['Use the 220Ω series resistor between D13 and the LED anode.'],
+  };
+  design.drcReport = runDRC(design);
+  return design;
+}
+
 export function generateCircuitLocal(prompt: string, preset?: string): CircuitDesign {
+  if (!preset && /\b(?:push[ -]?button|button)\b/i.test(prompt) && /\b(?:blink|led)\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt)) {
+    const design = { ...buttonLedTemplate, components: buttonLedTemplate.components.map(component => ({ ...component, pins: [...component.pins] })), pinMappings: buttonLedTemplate.pinMappings.map(mapping => ({ ...mapping })) };
+    design.id = `button-led-${Math.random().toString(36).slice(2, 9)}`;
+    design.description = `${buttonLedTemplate.description} Requested project: ${prompt}`;
+    design.drcReport = runDRC(design);
+    return design;
+  }
   if (!preset && /motor/i.test(prompt) && /l298n|arduino\s*uno/i.test(prompt)) {
     const design = { ...motorControllerTemplate, components: motorControllerTemplate.components.map(component => ({ ...component, pins: [...component.pins] })), pinMappings: motorControllerTemplate.pinMappings.map(mapping => ({ ...mapping })) };
     design.id = `motor-${Math.random().toString(36).slice(2, 9)}`;
     design.description = `${motorControllerTemplate.description} Requested project: ${prompt}`;
     design.drcReport = runDRC(design);
     return design;
+  }
+  if (!preset && /\b(?:blink|flash)\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt) && !/\bbutton\b/i.test(prompt)) {
+    return makeBlinkLedDesign(prompt);
   }
   if (preset && templates[preset]) {
     const design = { ...templates[preset] };
@@ -285,16 +337,21 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
   const lowerPrompt = prompt.toLowerCase();
 
   let baseTemplate = templates['esp32-weather'];
+  let isSupportedMatch = true;
   if (lowerPrompt.includes('stm32') || lowerPrompt.includes('drone')) {
     baseTemplate = templates['stm32-drone'];
   } else if (lowerPrompt.includes('pico') || lowerPrompt.includes('rp2040') || lowerPrompt.includes('synth')) {
     baseTemplate = templates['rpi-pico-synth'];
+  } else if (/\b(?:bme280|weather|temperature|humidity|pressure|oled|ssd1306)\b/i.test(prompt)) {
+    baseTemplate = templates['esp32-weather'];
+  } else if (/\b(?:esp32|esp-32)\b/i.test(prompt)) {
+    baseTemplate = templates['esp32-weather'];
+    isSupportedMatch = false;
+  } else {
+    isSupportedMatch = false;
   }
 
   const components = [...baseTemplate.components];
-  if (lowerPrompt.includes('motor')) {
-    components.push({ id: 'm1', name: 'L298N', description: 'Dual Motor Driver', category: 'Actuator', package: 'Module', estimatedCost: 350.00, pins: ['ENA', 'IN1', 'IN2', 'OUT1', 'OUT2'], operatingVoltage: 12.0, maxCurrent_mA: 2000 });
-  }
 
   // Fix 1: Universal Resistor Description Sanitizer
   const sanitizedMappings = baseTemplate.pinMappings.map(mapping => {
@@ -318,7 +375,9 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
     description: `Synthesized from: "${prompt}"`,
     components,
     pinMappings: sanitizedMappings,
-    warnings: ['AI generated circuit. Review DRC report.']
+    warnings: isSupportedMatch
+      ? ['Template-matched circuit generated for this supported request. Review the DRC report before prototyping.']
+      : [`This request could not be matched to a validated local circuit template. The displayed ${baseTemplate.title} design is only a starting point and may not meet the prompt. Configure the AI backend for custom circuit synthesis.`]
   };
 
   generatedDesign.drcReport = runDRC(generatedDesign);
@@ -327,6 +386,9 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
 }
 
 export async function generateCircuit(prompt: string, preset?: string): Promise<CircuitDesign> {
+  if (!preset && /\b(?:push[ -]?button|button)\b/i.test(prompt) && /\b(?:blink|led)\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt)) {
+    return generateCircuitLocal(prompt);
+  }
   if (!preset && /motor/i.test(prompt) && /l298n|arduino\s*uno/i.test(prompt)) {
     return generateCircuitLocal(prompt);
   }

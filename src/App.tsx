@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import PromptStudio from './components/PromptStudio';
 import SchematicViewer from './components/SchematicViewer';
 import PinoutTable from './components/PinoutTable';
 import BomTable from './components/BomTable';
-import CodeEditor from './components/CodeEditor';
 import PcbViewer from './components/PcbViewer';
 import DrcReport from './components/DrcReport';
 import LabGuideView from './components/LabGuideView';
 import BreadboardVisualizer from './components/BreadboardVisualizer';
 import DesignHistory, { type HistoryEntry } from './components/DesignHistory';
 import Toast, { type ToastMessage } from './components/Toast';
+import IntegratedIdeWorkspace from './components/IntegratedIdeWorkspace';
 import { Cpu, List, CircuitBoard, LayoutDashboard, ShieldCheck, BookOpen, Layers } from 'lucide-react';
 import { generateCircuit } from './services/aiCircuitEngine';
 import type { CircuitDesign } from './types/circuit';
@@ -101,15 +101,17 @@ function App() {
       <Header currentDesign={design} onShowToast={showToast} onOpenIDE={() => setIsIdeOpen(true)} />
       <Toast toasts={toasts} onDismiss={dismissToast} />
 
-      <div className="main-content">
-        <aside className="sidebar">
-          <PromptStudio onGenerate={handlePromptSubmit} isGenerating={isGenerating} />
-          <DesignHistory
-            history={history}
-            currentDesignId={design?.id ?? null}
-            onSelect={handleHistorySelect}
-          />
-        </aside>
+      <div className={`main-content ${isIdeOpen ? 'ide-mode' : ''}`}>
+        {!isIdeOpen && (
+          <aside className="sidebar">
+            <PromptStudio onGenerate={handlePromptSubmit} isGenerating={isGenerating} />
+            <DesignHistory
+              history={history}
+              currentDesignId={design?.id ?? null}
+              onSelect={handleHistorySelect}
+            />
+          </aside>
+        )}
 
         <main className="workspace">
           {isGenerating ? (
@@ -135,10 +137,10 @@ function App() {
             </div>
           ) : design && isIdeOpen ? (
             <div className="standalone-ide-page">
-              <CodeEditor
+              <IntegratedIdeWorkspace
                 design={design}
-                onShowToast={showToast}
                 onClose={() => setIsIdeOpen(false)}
+                onShowToast={showToast}
                 onFirmwareChange={firmwareCode => setDesign(current => current ? { ...current, firmwareCode } : current)}
               />
             </div>
