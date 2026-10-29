@@ -494,7 +494,15 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
-  background: #f3f7fa;
+  background: #f4f8fb;
+}
+
+.schematic-canvas:fullscreen {
+  background: #f4f8fb;
+}
+
+.schematic-canvas .react-flow {
+  background: #f4f8fb;
 }
 
 .schematic-fullscreen-toggle {
@@ -1709,14 +1717,15 @@ body {
 }
 
 .toolbar-btn {
-  background: rgba(22, 26, 34, 0.85);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-color);
-  color: var(--text-main);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  display: flex;
+  min-height: 38px;
+  background: #ffffff;
+  border: 1px solid #aebdc9;
+  box-shadow: 0 2px 8px rgba(23, 33, 43, 0.16);
+  color: #17212b;
+  padding: 7px 12px;
+  border-radius: 7px;
+  font: 600 0.82rem/1.2 var(--font-main);
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
@@ -1724,9 +1733,59 @@ body {
 }
 
 .toolbar-btn:hover {
-  background: var(--bg-panel);
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  background: #e8f5f5;
+  border-color: #087e8b;
+  color: #075e68;
+}
+
+.toolbar-btn:focus-visible {
+  outline: 3px solid #087e8b;
+  outline-offset: 2px;
+}
+
+.schematic-canvas .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid #aebdc9;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(23, 33, 43, 0.16);
+}
+
+.schematic-canvas .react-flow__controls-button {
+  width: 30px;
+  height: 30px;
+  border-bottom: 1px solid #d5dee5;
+  background: #ffffff;
+  color: #17212b;
+  fill: #17212b;
+}
+
+.schematic-canvas .react-flow__controls-button:hover {
+  background: #e8f5f5;
+}
+
+.schematic-canvas .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.schematic-canvas .react-flow__controls-button:focus-visible,
+.schematic-fullscreen-toggle:focus-visible {
+  outline: 3px solid #087e8b;
+  outline-offset: -3px;
+}
+
+@media (max-width: 520px) {
+  .schematic-toolbar {
+    top: 8px;
+    right: 8px;
+    gap: 6px;
+  }
+
+  .toolbar-btn {
+    min-height: 36px;
+    padding: 6px 9px;
+    font-size: 0.76rem;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -2775,6 +2834,5 @@ body {
   width: 100%;
   height: 160px;
 }
-
 
 

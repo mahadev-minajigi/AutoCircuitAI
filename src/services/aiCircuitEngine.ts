@@ -353,28 +353,13 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
 
   const components = [...baseTemplate.components];
 
-  // Fix 1: Universal Resistor Description Sanitizer
-  const sanitizedMappings = baseTemplate.pinMappings.map(mapping => {
-    const comp = components.find(c => c.id === mapping.componentId);
-    const isResistor = comp?.name.toLowerCase().includes('resistor') ||
-                      mapping.description.toLowerCase().includes('resistor') ||
-                      mapping.componentPin.toLowerCase().includes('res');
-    if (isResistor && !mapping.description.toLowerCase().includes('pull-up')) {
-      return {
-        ...mapping,
-        description: 'current-limiting resistor in series with LED'
-      };
-    }
-    return mapping;
-  });
-
   const generatedDesign: CircuitDesign = {
     ...baseTemplate,
     id: 'ai-generated-' + Math.random().toString(36).substring(7),
     title: 'AI Generated: ' + (baseTemplate.title.includes('Custom') ? 'Custom Build' : baseTemplate.title),
     description: `Synthesized from: "${prompt}"`,
     components,
-    pinMappings: sanitizedMappings,
+    pinMappings: baseTemplate.pinMappings,
     warnings: isSupportedMatch
       ? ['Template-matched circuit generated for this supported request. Review the DRC report before prototyping.']
       : [`This request could not be matched to a validated local circuit template. The displayed ${baseTemplate.title} design is only a starting point and may not meet the prompt. Configure the AI backend for custom circuit synthesis.`]
@@ -386,51 +371,43 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
 }
 
 export async function generateCircuit(prompt: string, preset?: string): Promise<CircuitDesign> {
-  if (!preset && /\b(?:push[ -]?button|button)\b/i.test(prompt) && /\b(?:blink|led)\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt)) {
-    return generateCircuitLocal(prompt);
-  }
-  if (!preset && /motor/i.test(prompt) && /l298n|arduino\s*uno/i.test(prompt)) {
-    return generateCircuitLocal(prompt);
-  }
-  if (!preset && /flight\s*controller|drone/i.test(prompt)) {
-    return generateCircuitLocal(prompt);
-  }
+  let response: Response;
   try {
-    const response = await fetch('/api/generate', {
+    response = await fetch('/api/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ prompt, preset }),
     });
-
-    if (response.ok) {
-      const data: CircuitDesign = await response.json();
-      
-      // Fix 1: Universal Resistor Description Sanitizer on API response
-      data.pinMappings = data.pinMappings.map(mapping => {
-        const comp = data.components.find(c => c.id === mapping.componentId);
-        const isResistor = comp?.name.toLowerCase().includes('resistor') ||
-                          mapping.description.toLowerCase().includes('resistor') ||
-                          mapping.componentPin.toLowerCase().includes('res');
-        if (isResistor && !mapping.description.toLowerCase().includes('pull-up')) {
-          return {
-            ...mapping,
-            description: 'current-limiting resistor in series with LED'
-          };
-        }
-        return mapping;
-      });
-
-      // Always evaluate with the current client rules. API responses can carry
-      // a cached report produced by an older deployment, which kept obsolete
-      // duplicate warnings/errors visible after the rule fixes.
-      data.drcReport = runDRC(data);
-      return data;
-    }
   } catch {
-    // If backend endpoint is unavailable (e.g. offline or static client), fallback seamlessly
+    const fallback = generateCircuitLocal(prompt, preset);
+    fallback.warnings = [
+      ...fallback.warnings,
+      'The generation backend could not be reached. This is a local template fallback and may not match the prompt.',
+    ];
+    return fallback;
   }
 
-  return generateCircuitLocal(prompt, preset);
+  if (!response.ok) {
+    let detail = `Generation API returned HTTP ${response.status}.`;
+    try {
+      const payload: unknown = await response.json();
+      if (payload && typeof payload === 'object' && 'detail' in payload && typeof payload.detail === 'string') {
+        detail = payload.detail;
+      }
+    } catch {
+      // Keep the HTTP status as an actionable error if the response is not JSON.
+    }
+    throw new Error(detail);
+  }
+
+  const data: CircuitDesign = await response.json();
+  if (!data || !Array.isArray(data.components) || !Array.isArray(data.pinMappings) || typeof data.firmwareCode !== 'string') {
+    throw new Error('Generation API returned an incomplete circuit. No design was loaded.');
+  }
+
+  // Always evaluate with current client rules; do not trust cached API reports.
+  data.drcReport = runDRC(data);
+  return data;
 }

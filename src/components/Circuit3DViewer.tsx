@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Minus, Plus, RotateCcw, RotateCw, Sparkles, Waypoints, Zap } from 'lucide-react';
 import type { CircuitDesign, Component, PinMapping } from '../types/circuit';
+import { analyzeFirmwareForSimulation, firmwareDrivesPin, getLedStatesAt, getOutputStateAt } from '../services/firmwareSimulation';
 import './Circuit3DViewer.css';
 
 interface Circuit3DViewerProps {
@@ -20,6 +21,13 @@ interface CircuitWire {
   curve: THREE.CatmullRomCurve3;
   pulse: THREE.Mesh;
   protocol: string;
+  mcuPin: string;
+}
+
+interface CircuitLed {
+  lens: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
+  glow: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  componentId: string;
 }
 
 const protocolColors: Record<string, number> = {
@@ -66,6 +74,15 @@ function componentDimensions(component: Component): [number, number, number] {
 
 function makeMaterial(color: number, roughness = 0.62) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.12 });
+}
+
+function ledColor(name: string) {
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes('green')) return 0x28d17c;
+  if (lowerName.includes('blue')) return 0x38a9ff;
+  if (lowerName.includes('yellow') || lowerName.includes('amber')) return 0xffc247;
+  if (lowerName.includes('white')) return 0xe7f4ff;
+  return 0xff4b45;
 }
 
 function makeLabel(text: string) {
@@ -175,9 +192,10 @@ function addMcuBoardDetails(scene: THREE.Scene, boardGroup: THREE.Group) {
   scene.add(boardGroup);
 }
 
-function createPartMesh(component: Component, selected: boolean) {
+function createPartMesh(component: Component, selected: boolean): { group: THREE.Group; led?: CircuitLed } {
   const group = new THREE.Group();
   group.userData.componentId = component.id;
+  let led: CircuitLed | undefined;
   const [width, height, depth] = componentDimensions(component);
   const outlineColor = selected ? 0x2da99c : 0x293d4d;
   const baseColor = component.category === 'MCU' ? 0x273b4d
@@ -222,6 +240,16 @@ function createPartMesh(component: Component, selected: boolean) {
     cylinder.position.set(0, height + 8, 0);
     cylinder.castShadow = true;
     group.add(cylinder);
+    const bandColors = [0x9a4f36, 0xd5a62e, 0x6e3c2a];
+    bandColors.forEach((color, index) => {
+      const band = new THREE.Mesh(
+        new THREE.CylinderGeometry(4.38, 4.38, 1.35, 12),
+        makeMaterial(color, 0.42),
+      );
+      band.rotation.z = Math.PI / 2;
+      band.position.set((index - 1) * width * 0.17, height + 8, 0);
+      group.add(band);
+    });
     const leadGeometry = new THREE.CylinderGeometry(0.7, 0.7, width * 0.22, 8);
     for (const side of [-1, 1]) {
       const lead = new THREE.Mesh(leadGeometry, makeMaterial(0xb8a77f, 0.4));
@@ -237,31 +265,90 @@ function createPartMesh(component: Component, selected: boolean) {
       group.add(text);
     }
   } else if (/led|diode/i.test(component.name)) {
+    const color = ledColor(component.name);
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(6.6, 6.6, 2, 16),
+      makeMaterial(0x252e37, 0.38),
+    );
+    base.position.y = height + 6;
+    base.castShadow = true;
+    group.add(base);
     const domeMaterial = new THREE.MeshStandardMaterial({
-      color: 0xff6d61,
-      emissive: selected ? 0xd53c27 : 0x9b2d21,
-      emissiveIntensity: selected ? 0.85 : 0.35,
-      roughness: 0.24,
+      color,
+      emissive: color,
+      emissiveIntensity: selected ? 0.85 : 0.04,
+      roughness: 0.2,
+      metalness: 0.02,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.72,
     });
     const dome = new THREE.Mesh(new THREE.SphereGeometry(7.5, 18, 14), domeMaterial);
-    dome.position.y = height + 11;
+    dome.scale.y = 0.9;
+    dome.position.y = height + 11.5;
     dome.castShadow = true;
     dome.userData.componentId = component.id;
     group.add(dome);
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(10.5, 16, 12),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false }),
+    );
+    glow.position.copy(dome.position);
+    glow.userData.componentId = component.id;
+    group.add(glow);
     for (const side of [-1, 1]) {
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 12, 8), makeMaterial(0xb8c3c0, 0.38));
       leg.position.set(side * 4, 1, 0);
       group.add(leg);
     }
+    led = { lens: dome, glow, componentId: component.id };
   } else if (/display|oled|screen/i.test(component.name)) {
-    const screen = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.78, 1.2, depth * 0.62),
-      new THREE.MeshStandardMaterial({ color: 0x101f2a, emissive: 0x123933, emissiveIntensity: 0.9, roughness: 0.2 }),
+    const bezel = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.9, 2, depth * 0.78),
+      makeMaterial(0x101820, 0.3),
     );
-    screen.position.y = height + 1;
+    bezel.position.y = height + 0.5;
+    bezel.castShadow = true;
+    group.add(bezel);
+    const screen = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.76, 0.8, depth * 0.62),
+      new THREE.MeshStandardMaterial({ color: 0x102b32, emissive: 0x176c69, emissiveIntensity: 0.7, roughness: 0.18 }),
+    );
+    screen.position.y = height + 1.8;
     group.add(screen);
+    const displayLines = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.46, 0.35, 0.7),
+      new THREE.MeshBasicMaterial({ color: 0x79f2ce }),
+    );
+    displayLines.position.set(0, height + 2.4, -depth * 0.12);
+    group.add(displayLines);
+  } else if (/button|switch/i.test(component.name)) {
+    const buttonBase = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.72, 3, depth * 0.72),
+      makeMaterial(0x242c35, 0.42),
+    );
+    buttonBase.position.y = height + 1.5;
+    group.add(buttonBase);
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(5.2, 5.8, 5, 16),
+      makeMaterial(0xd94f4a, 0.3),
+    );
+    cap.position.y = height + 5.5;
+    cap.castShadow = true;
+    group.add(cap);
+  } else if (/buzzer|speaker|motor/i.test(component.name)) {
+    const can = new THREE.Mesh(
+      new THREE.CylinderGeometry(width * 0.32, width * 0.36, height + 4, 20),
+      makeMaterial(/motor/i.test(component.name) ? 0x89969b : 0x303b45, 0.32),
+    );
+    can.position.y = height + 3;
+    can.castShadow = true;
+    group.add(can);
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(width * 0.28, width * 0.28, 1, 20),
+      makeMaterial(/motor/i.test(component.name) ? 0x39464d : 0x141d24, 0.3),
+    );
+    cap.position.y = height + 5.5;
+    group.add(cap);
   } else {
     const chip = new THREE.Mesh(
       new THREE.BoxGeometry(width * 0.48, 3.2, depth * 0.42),
@@ -294,7 +381,7 @@ function createPartMesh(component: Component, selected: boolean) {
     group.add(nameLabel);
   }
   group.userData.componentId = component.id;
-  return group;
+  return { group, led };
 }
 
 function mcuPinPosition(pin: string): THREE.Vector3 {
@@ -354,7 +441,7 @@ function buildWire(
   );
   pulse.userData.offset = index * 0.137;
   scene.add(pulse);
-  return { curve, pulse, protocol: mapping.protocol } satisfies CircuitWire;
+  return { curve, pulse, protocol: mapping.protocol, mcuPin: mapping.mcuPin } satisfies CircuitWire;
 }
 
 const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedComponentId, onSelectComponent }) => {
@@ -369,11 +456,15 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
   const wiresRef = useRef<CircuitWire[]>([]);
   const onSelectRef = useRef(onSelectComponent);
   const poweredRef = useRef(true);
+  const wiresVisibleRef = useRef(true);
+  const simulationPlan = useMemo(() => analyzeFirmwareForSimulation(design), [design]);
+  const simulationPlanRef = useRef(simulationPlan);
   const [camera, setCamera] = useState({ labels: true, wires: true, powered: true });
   const [renderError, setRenderError] = useState<string | null>(null);
   const mcu = design.components.find(component => component.category === 'MCU');
 
   useEffect(() => { onSelectRef.current = onSelectComponent; }, [onSelectComponent]);
+  useEffect(() => { simulationPlanRef.current = simulationPlan; }, [simulationPlan]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -435,11 +526,13 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
     const { mcu: generatedMcu, positions } = createPositions(design.components);
     const partGroups = new Map<string, THREE.Group>();
     const labels: THREE.Sprite[] = [];
+    const leds: CircuitLed[] = [];
 
     design.components.forEach(component => {
       const position = positions.get(component.id);
       if (!position || component.id === generatedMcu?.id) return;
-      const partGroup = createPartMesh(component, false);
+      const { group: partGroup, led } = createPartMesh(component, false);
+      if (led) leds.push(led);
       partGroup.position.set(position.x, 3, position.z);
       partGroup.traverse(object => {
         if (object instanceof THREE.Sprite && object.userData.label) labels.push(object);
@@ -449,7 +542,8 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
     });
 
     if (generatedMcu) {
-      const mcuGroup = createPartMesh(generatedMcu, false);
+      const { group: mcuGroup, led } = createPartMesh(generatedMcu, false);
+      if (led) leds.push(led);
       mcuGroup.position.set(0, 7, 0);
       mcuGroup.traverse(object => {
         if (object instanceof THREE.Sprite && object.userData.label) labels.push(object);
@@ -523,13 +617,30 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
     renderer.domElement.addEventListener('keydown', handleKeyDown);
 
     let frame = 0;
+    let simulationElapsed = 0;
+    let previousFrameTime = 0;
     const animate = (time: number) => {
       controls.update();
+      const activePlan = simulationPlanRef.current;
+      if (previousFrameTime > 0 && poweredRef.current) simulationElapsed += time - previousFrameTime;
+      previousFrameTime = time;
+      const ledStates = getLedStatesAt(activePlan, simulationElapsed);
       wires.forEach(wire => {
-        if (poweredRef.current) {
+        const active = poweredRef.current
+          && firmwareDrivesPin(activePlan, wire.mcuPin)
+          && getOutputStateAt(activePlan, wire.mcuPin, simulationElapsed) === true;
+        wire.pulse.visible = wiresVisibleRef.current && active;
+        if (active) {
           const offset = Number(wire.pulse.userData.offset) || 0;
           wire.pulse.position.copy(wire.curve.getPoint((time / 1700 + offset) % 1));
         }
+      });
+      leds.forEach(led => {
+        const lit = poweredRef.current && ledStates.get(led.componentId) === true;
+        led.lens.material.emissiveIntensity = lit ? 1.8 : 0.04;
+        led.lens.material.opacity = lit ? 0.98 : 0.64;
+        led.glow.material.opacity = lit ? 0.2 : 0;
+        led.glow.scale.setScalar(lit ? 1.12 : 0.86);
       });
       renderer.render(scene, viewCamera);
       frame = requestAnimationFrame(animate);
@@ -592,14 +703,17 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
 
   useEffect(() => {
     poweredRef.current = camera.powered;
+    wiresVisibleRef.current = camera.wires;
     labelSpritesRef.current.forEach(label => { label.visible = camera.labels; });
     sceneRef.current?.traverse(object => {
       if (object instanceof THREE.Mesh && object.geometry instanceof THREE.TubeGeometry) {
         object.visible = camera.wires;
       }
     });
-    wiresRef.current.forEach(wire => { wire.pulse.visible = camera.wires && camera.powered; });
-  }, [camera.labels, camera.powered, camera.wires]);
+    wiresRef.current.forEach(wire => {
+      wire.pulse.visible = camera.wires && camera.powered && firmwareDrivesPin(simulationPlan, wire.mcuPin);
+    });
+  }, [camera.labels, camera.powered, camera.wires, simulationPlan]);
 
   const resetCamera = useCallback(() => {
     const controls = controlsRef.current;
@@ -639,7 +753,6 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
   };
   const togglePowered = () => {
     setCamera(current => ({ ...current, powered: !current.powered }));
-    wiresRef.current.forEach(wire => { wire.pulse.visible = camera.wires && !camera.powered; });
   };
 
   const componentCount = design.components.length;
@@ -664,7 +777,7 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
           <button className={camera.labels ? 'selected' : ''} onClick={() => setCamera(current => ({ ...current, labels: !current.labels }))} title="Toggle component labels" aria-label="Toggle component labels"><Sparkles size={16} /></button>
           <button className={camera.powered ? 'powered' : ''} onClick={togglePowered} title={camera.powered ? 'Pause visual simulation' : 'Run visual simulation'} aria-label={camera.powered ? 'Pause simulation' : 'Run simulation'}><Zap size={17} /></button>
         </div>
-        <div className="circuit-3d-tip"><span>3D</span> {camera.powered ? 'Visual signals active' : 'Visual simulation paused'} · {mcu?.name ?? 'Board not identified'}</div>
+        <div className="circuit-3d-tip" title={simulationPlan.message}><span>3D</span> {camera.powered ? (simulationPlan.isSupported ? 'Firmware outputs · visual model' : 'Firmware not simulated') : 'Visual simulation paused'} · {mcu?.name ?? 'Board not identified'}</div>
       </div>
       <footer className="circuit-3d-legend">
         {Object.entries(protocolColors).map(([protocol, color]) => (

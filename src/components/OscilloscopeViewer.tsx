@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Activity } from 'lucide-react';
 import type { CircuitDesign } from '../types/circuit';
+import { analyzeFirmwareForSimulation, getOutputStateAt } from '../services/firmwareSimulation';
 
 interface OscilloscopeViewerProps {
   isSimulating?: boolean;
@@ -9,29 +10,18 @@ interface OscilloscopeViewerProps {
 
 const OscilloscopeViewer: React.FC<OscilloscopeViewerProps> = ({ isSimulating = true, design }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Detect protocol from design
-  const protocol = useMemo(() => {
-    if (!design) return 'I2C';
-    const protos = design.pinMappings.map(p => p.protocol);
-    if (protos.includes('I2S')) return 'I2S';
-    if (protos.includes('SPI')) return 'SPI';
-    if (protos.includes('PWM')) return 'PWM';
-    if (protos.includes('I2C')) return 'I2C';
-    return 'GPIO';
-  }, [design]);
-
-  const ch1Label = protocol === 'SPI' ? 'CH1: SCK (10MHz)' : protocol === 'I2S' ? 'CH1: BCLK (1.41MHz)' : protocol === 'PWM' ? 'CH1: PWM (1kHz 50%)' : 'CH1: SCL (400kHz)';
-  const ch2Label = protocol === 'SPI' ? 'CH2: MOSI (Data)' : protocol === 'I2S' ? 'CH2: DIN (Audio)' : protocol === 'PWM' ? 'CH2: Pulse Feedback' : 'CH2: SDA (Data)';
+  const simulationPlan = useMemo(
+    () => design ? analyzeFirmwareForSimulation(design) : null,
+    [design],
+  );
+  const outputPins = useMemo(() => simulationPlan ? [...simulationPlan.outputPins] : [], [simulationPlan]);
+  const ch1Label = outputPins[0] ? `CH1: GPIO ${outputPins[0]}` : 'CH1: no modeled output';
+  const ch2Label = outputPins[1] ? `CH2: GPIO ${outputPins[1]}` : 'CH2: no second output';
 
   const [channel1Active, setChannel1Active] = useState<boolean>(true);
   const [channel2Active, setChannel2Active] = useState<boolean>(true);
-  const [isRunning, setIsRunning] = useState<boolean>(isSimulating);
-  const offsetRef = useRef<number>(0);
-
-  useEffect(() => {
-    setIsRunning(isSimulating);
-  }, [isSimulating]);
+  const [scopePaused, setScopePaused] = useState(false);
+  const isRunning = isSimulating && !scopePaused;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -40,8 +30,13 @@ const OscilloscopeViewer: React.FC<OscilloscopeViewerProps> = ({ isSimulating = 
     if (!ctx) return;
 
     let animId: number;
+    let elapsedMs = 0;
+    let previousFrameTime = 0;
 
     const renderScope = () => {
+      const now = performance.now();
+      if (isRunning && simulationPlan?.isSupported && previousFrameTime > 0) elapsedMs += now - previousFrameTime;
+      previousFrameTime = now;
       const width = canvas.parentElement?.clientWidth || 700;
       const height = 180;
       const dpr = window.devicePixelRatio || 1;
@@ -81,108 +76,80 @@ const OscilloscopeViewer: React.FC<OscilloscopeViewerProps> = ({ isSimulating = 
       ctx.lineTo(width / 2, height);
       ctx.stroke();
 
-      if (isRunning) {
-        offsetRef.current += 3;
-      }
-
-      const offset = offsetRef.current;
-
-      // Draw CH1 Clock / Square Wave (Yellow)
-      if (channel1Active) {
-        ctx.strokeStyle = '#eab308';
+      const drawOutput = (pin: string | undefined, baseline: number, color: string, active: boolean) => {
+        if (!pin || !active || !simulationPlan?.isSupported) return;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 2;
-        ctx.shadowColor = '#eab308';
+        ctx.shadowColor = color;
         ctx.shadowBlur = 8;
         ctx.beginPath();
-
-        const ch1Baseline = height * 0.35;
-        const clockPeriod = protocol === 'SPI' ? 24 : protocol === 'I2S' ? 30 : 40;
-
-        for (let x = 0; x < width; x++) {
-          const t = (x + offset) % clockPeriod;
-          const isHigh = t < clockPeriod / 2;
-          const y = isHigh ? ch1Baseline - 25 : ch1Baseline + 15;
+        const windowStart = elapsedMs - simulationPlan.durationMs;
+        for (let x = 0; x < width; x += 1) {
+          const sampleTime = windowStart + (x / Math.max(width - 1, 1)) * simulationPlan.durationMs;
+          const high = getOutputStateAt(simulationPlan, pin, sampleTime);
+          const y = high ? baseline - 25 : baseline + 15;
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
         ctx.stroke();
         ctx.shadowBlur = 0;
-      }
+      };
 
-      // Draw CH2 Data / Modulated Waveform (Cyan)
-      if (channel2Active) {
-        ctx.strokeStyle = '#00f0ff';
-        ctx.lineWidth = 2;
-        ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
+      drawOutput(outputPins[0], height * 0.35, '#eab308', channel1Active);
+      drawOutput(outputPins[1], height * 0.75, '#00f0ff', channel2Active);
 
-        const ch2Baseline = height * 0.75;
-        const dataPeriod = protocol === 'SPI' ? 48 : protocol === 'I2S' ? 60 : 80;
-
-        for (let x = 0; x < width; x++) {
-          let y = ch2Baseline;
-          if (protocol === 'I2S') {
-            // Audio sine wave overlay on audio serial bus
-            const audioVal = Math.sin((x + offset) * 0.08) * 22;
-            y = ch2Baseline + audioVal;
-          } else {
-            const t = (x + offset) % dataPeriod;
-            const isHigh = (Math.sin((x + offset) * 0.05) > 0.1) && (t > 10 && t < dataPeriod - 10);
-            y = isHigh ? ch2Baseline - 25 : ch2Baseline + 15;
-          }
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-      }
-
-      // Channel Labels & Telemetry Readout
       ctx.fillStyle = '#eab308';
       ctx.font = 'bold 10px JetBrains Mono, monospace';
-      ctx.fillText(`${ch1Label} | 3.3V pk-pk`, 12, 20);
+      ctx.fillText(ch1Label, 12, 20);
 
       ctx.fillStyle = '#00f0ff';
-      ctx.fillText(`${ch2Label} | PROTOCOL: ${protocol}`, 12, 36);
+      ctx.fillText(ch2Label, 12, 36);
 
       ctx.fillStyle = '#94a3b8';
       ctx.font = '9px JetBrains Mono, monospace';
       ctx.textAlign = 'right';
-      const timeDiv = protocol === 'SPI' ? '50.0 ns/div' : protocol === 'I2S' ? '500 ns/div' : '2.50 µs/div';
-      ctx.fillText(`TIME: ${timeDiv} | TRIG: AUTO LOCKED`, width - 12, 20);
+      ctx.fillText(simulationPlan?.isSupported ? 'TIME: firmware loop · visual only' : 'NO FIRMWARE-DERIVED TRACE', width - 12, 20);
+      if (!simulationPlan?.isSupported) {
+        ctx.fillStyle = '#cbd5e1';
+        ctx.textAlign = 'center';
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillText('This sketch is outside the supported visual model.', width / 2, height / 2);
+      }
 
       animId = requestAnimationFrame(renderScope);
     };
 
     renderScope();
     return () => cancelAnimationFrame(animId);
-  }, [isRunning, channel1Active, channel2Active, protocol, ch1Label, ch2Label]);
+  }, [isRunning, channel1Active, channel2Active, simulationPlan, outputPins, ch1Label, ch2Label]);
 
   return (
     <div className="oscilloscope-card">
       <div className="oscilloscope-toolbar">
         <div className="scope-title">
           <Activity size={16} className="scope-icon" />
-          <span>Virtual DSO & Logic Analyzer ({protocol} Bus Signals)</span>
+          <span>Firmware output monitor · visual model only</span>
         </div>
 
         <div className="scope-controls">
           <button 
             className={`scope-ch-btn ch1-btn ${channel1Active ? 'active' : ''}`}
+            disabled={!simulationPlan?.isSupported || !outputPins[0]}
             onClick={() => setChannel1Active(prev => !prev)}
           >
             {ch1Label.split(' ')[0]}
           </button>
           <button 
             className={`scope-ch-btn ch2-btn ${channel2Active ? 'active' : ''}`}
+            disabled={!simulationPlan?.isSupported || !outputPins[1]}
             onClick={() => setChannel2Active(prev => !prev)}
           >
             {ch2Label.split(' ')[0]}
           </button>
           <button 
             className="scope-run-btn"
-            onClick={() => setIsRunning(prev => !prev)}
+            disabled={!simulationPlan?.isSupported || !isSimulating}
+            onClick={() => setScopePaused(prev => !prev)}
           >
             {isRunning ? 'Pause' : 'Run'}
           </button>

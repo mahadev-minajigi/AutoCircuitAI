@@ -68,12 +68,22 @@ function App() {
     setTimeout(async () => {
       clearInterval(stepInterval);
       setGeneratingStep(workflowSteps.length - 1);
-      const result = await generateCircuit(prompt, preset);
-      setDesign(result);
-      setHistory(prev => [...prev, { design: result, prompt, timestamp: Date.now() }]);
-      setIsGenerating(false);
-      setActiveTab('schematic');
-      showToast(`Design ready: ${result.title}`, 'success');
+      try {
+        const result = await generateCircuit(prompt, preset);
+        setDesign(result);
+        setHistory(prev => [...prev, { design: result, prompt, timestamp: Date.now() }]);
+        setActiveTab('schematic');
+        const usedLocalFallback = result.warnings.some(warning => warning.includes('generation backend could not be reached'));
+        showToast(
+          usedLocalFallback ? 'Backend unavailable; loaded a local template that may not match.' : `Design ready: ${result.title}`,
+          usedLocalFallback ? 'error' : 'success',
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Circuit generation failed.';
+        showToast(message, 'error');
+      } finally {
+        setIsGenerating(false);
+      }
     }, 1500);
   };
 

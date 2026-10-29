@@ -6,9 +6,9 @@ import shutil
 import subprocess
 import tempfile
 from typing import List, Optional, Literal
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,7 +38,10 @@ class Component(BaseModel):
     estimatedCost: float
     pins: List[str]
     operatingVoltage: Optional[float] = None
-    maxCurrent_mA: Optional[float] = None
+    maxCurrent_mA: Optional[float] = Field(
+        default=None,
+        description="Estimated maximum operating current consumed in this design; not regulator output capacity.",
+    )
     pinDescriptions: Optional[dict[str, str]] = None
 
 class PinMapping(BaseModel):
@@ -49,6 +52,7 @@ class PinMapping(BaseModel):
     sourceComponentPin: Optional[str] = None
     protocol: Literal['GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'Power', 'GND', 'I2S']
     description: str
+    wireColor: Optional[str] = None
 
 class DrcRule(BaseModel):
     type: Literal['Error', 'Warning', 'Pass']
@@ -61,11 +65,12 @@ class CircuitDesign(BaseModel):
     components: List[Component]
     pinMappings: List[PinMapping]
     firmwareCode: str
-    warnings: List[str] = []
+    warnings: List[str] = Field(default_factory=list)
     drcReport: Optional[List[DrcRule]] = None
+    labGuide: Optional[dict] = None
 
 class GenerateRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(min_length=3, max_length=4000)
     preset: Optional[str] = None
 
 class CompileRequest(BaseModel):
@@ -413,7 +418,7 @@ void loop() {
     }
 }
 
-def generate_with_gemini(prompt: str, api_key: str) -> Optional[CircuitDesign]:
+def generate_with_gemini(prompt: str, api_key: str) -> CircuitDesign:
     """Generates a structured circuit design using Google's official Gemini API."""
     try:
         from google import genai
@@ -421,8 +426,8 @@ def generate_with_gemini(prompt: str, api_key: str) -> Optional[CircuitDesign]:
 
         client = genai.Client(api_key=api_key)
 
-        system_instruction = """You are an expert electrical and embedded hardware engineer.
-Given a user's natural language circuit description, generate a complete, electrically valid circuit design in strict JSON.
+        system_instruction = """You are an expert electrical and embedded hardware design assistant.
+Given a user's natural language circuit description, propose a practical, reviewable starter circuit design in strict JSON. Do not imply that an LLM response is a substitute for datasheet review or electrical simulation.
 JSON format requirements:
 {
   "id": "gen-<unique-short-id>",
@@ -438,7 +443,7 @@ JSON format requirements:
       "estimatedCost": price in INR (float, e.g. 250.0),
       "pins": ["VCC", "GND", ...],
       "operatingVoltage": float (e.g. 3.3 or 5.0),
-      "maxCurrent_mA": float (e.g. 80.0)
+      "maxCurrent_mA": estimated operating current consumed in this design (mA), not rated supply capacity
     }
   ],
   "pinMappings": [
@@ -447,44 +452,223 @@ JSON format requirements:
       "componentId": "ID of connected component",
       "componentPin": "Pin on component (e.g. SDA)",
       "protocol": "GPIO" | "I2C" | "SPI" | "UART" | "ADC" | "PWM" | "Power" | "GND" | "I2S",
-      "description": "Connection purpose"
+      "description": "Connection purpose",
+      "wireColor": "Optional practical wire color as a hex string"
     }
   ],
-  "firmwareCode": "Complete, working Arduino C++ starter sketch (.ino)",
-  "warnings": ["Array of engineering notes, constraints, or warnings"]
+  "firmwareCode": "Complete, working starter sketch for the selected board and its libraries",
+  "warnings": ["Specific engineering assumptions, unresolved facts, and build cautions"],
+  "labGuide": {
+    "prerequisites": ["Exact parts and tools"],
+    "breadboardWiringSteps": [{"stepNumber": 1, "title": "Short action", "instruction": "Specific endpoints and polarity", "caution": "Optional safety caution"}],
+    "testingProcedure": ["Safe, measurable test step"],
+    "troubleshootingTips": ["Symptom and likely checks"],
+    "voltageSupplyNote": "Supply and current-limit guidance"
+  }
 }
 CRITICAL ELECTRICAL RULES:
-1. For regulators (e.g., AMS1117-3.3), maxCurrent_mA must be the QUIESCENT current (~5mA), NOT the rated 800mA output capacity.
-2. ESP32 typical current is ~240mA (350mA peak WiFi TX). Sensors like BME280 draw ~1mA, OLED displays draw ~20mA.
+1. maxCurrent_mA describes estimated maximum operating current consumed by a component in this design. Never put regulator output capacity or MCU source capacity in this field; describe supply capacity separately.
+2. Use conservative, workload-appropriate current estimates. If a reliable estimate is unavailable, state that in warnings rather than inventing precision.
 3. Every design MUST include exactly one MCU, correct power/GND connections, realistic pin numbers, and valid firmware.
 4. For I2C buses, include a separate 4.7kΩ pull-up on SDA and SCL to the MCU logic rail unless the selected modules explicitly include pull-ups. Add 100nF bypass capacitors across supply and ground at each MCU and IC; note physical placement within 10mm is a build instruction, not something proven by this JSON.
 5. For display firmware, set a visible text size and the library's explicit white color before drawing, then call display() after clearDisplay() so buffer changes reach the panel.
 6. Check every sensor/display begin() result. For BME280, try 0x76 and 0x77; if initialization fails, print a useful Serial error, show an error on an initialized display if possible, and stop normal sensor reads.
-7. Never claim a component is connected unless its pins are included in pinMappings."""
+7. Never claim a component is connected unless its pins are included in pinMappings.
+8. Use one MCU only. Include complete pin lists for all endpoints used in mappings. IDs must be unique.
+9. Treat the prompt as the source of requirements. Do not silently substitute a different project, board, sensor, voltage, or interface. If an exact part is ambiguous or its pinout is uncertain, state the assumption in warnings and prefer a common documented breakout/module over inventing package pin numbers.
+10. Ensure firmware pin names, component names, pin mappings, supply voltages, and wiring guide describe the same circuit. Do not output example code that refers to absent parts or pins.
+11. Include suitable current limiting, driver stages, flyback protection, pull-ups, decoupling, and a safe power source where required by the requested loads. Never connect motors, relays, high-power LEDs, heaters, or batteries directly to MCU GPIO.
+12. Keep the requested scope. If it is unsafe, underspecified, or not realistically buildable with the stated parts, explain the limitation in warnings instead of presenting it as verified.
+13. Return JSON only. Do not claim electrical validation, simulation, or datasheet verification that was not actually performed."""
 
-        # Use gemini-2.5-flash-lite which is active and highly responsive
         model_name = 'gemini-2.5-flash-lite'
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json",
-                temperature=0.2,
-            ),
-        )
+        previous_output = ""
+        last_error: Optional[Exception] = None
+        for attempt in range(2):
+            contents = prompt if attempt == 0 else (
+                "Revise your previous JSON to fix these validation errors. "
+                "Return only the complete corrected JSON design.\n"
+                f"Original user request:\n{prompt}\n"
+                f"Validation errors:\n{last_error}\n"
+                f"Previous JSON:\n{previous_output}"
+            )
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    temperature=0.2,
+                ),
+            )
 
-        raw_json = response.text
-        if not raw_json:
-            return None
-        data = json.loads(raw_json)
-        design = CircuitDesign(**data)
-        ensure_design_support_parts(design)
-        design.drcReport = run_drc(design)
-        return design
+            previous_output = response.text or ""
+            try:
+                if not previous_output:
+                    raise ValueError("Gemini returned an empty response.")
+                design = CircuitDesign(**json.loads(previous_output))
+                validate_generated_design(design)
+                ensure_design_support_parts(design)
+                validate_generated_design(design)
+                design.warnings.append(
+                    "AI-generated starter design: verify component pinouts, electrical ratings, power requirements, and wiring against current datasheets before assembly."
+                )
+                design.drcReport = run_drc(design)
+                return design
+            except Exception as error:
+                last_error = error
+                if attempt == 1:
+                    raise
+        raise ValueError("Gemini did not produce a valid circuit design.") from last_error
     except Exception as e:
         print(f"Gemini API generation error: {e}")
-        return None
+        raise
+
+def validate_generated_design(design: CircuitDesign) -> None:
+    """Reject malformed Gemini output before it is presented as a circuit."""
+    if not design.title.strip() or not design.description.strip():
+        raise ValueError("Generated design must include a title and engineering summary.")
+    if not design.components:
+        raise ValueError("Generated design has no components.")
+    component_ids = [component.id for component in design.components]
+    if len(component_ids) != len(set(component_ids)):
+        raise ValueError("Generated design contains duplicate component IDs.")
+    if any(not component.name.strip() or not component.pins for component in design.components):
+        raise ValueError("Every component must have a name and declared pin list.")
+    mcus = [component for component in design.components if component.category == 'MCU']
+    if len(mcus) != 1:
+        raise ValueError(f"Generated design must contain exactly one MCU; found {len(mcus)}.")
+
+    component_by_id = {component.id: component for component in design.components}
+    invalid_mappings = []
+    for mapping in design.pinMappings:
+        source = component_by_id.get(mapping.sourceComponentId) if mapping.sourceComponentId else mcus[0]
+        target = component_by_id.get(mapping.componentId)
+        if source is None or target is None:
+            invalid_mappings.append(f"{mapping.mcuPin} to {mapping.componentId}.{mapping.componentPin} references a missing component")
+            continue
+        source_pin = mapping.sourceComponentPin or mapping.mcuPin
+        if source_pin not in source.pins or mapping.componentPin not in target.pins:
+            invalid_mappings.append(f"{source.name}.{source_pin} to {target.name}.{mapping.componentPin} uses an undeclared pin")
+    if invalid_mappings:
+        raise ValueError("Generated design has invalid pin mappings: " + "; ".join(invalid_mappings[:8]))
+
+    if len(design.pinMappings) == 0:
+        raise ValueError("Generated design has no pin mappings.")
+    if not design.firmwareCode.strip():
+        raise ValueError("Generated design has no firmware sketch.")
+
+def prompt_coverage_warnings(prompt: str, design: CircuitDesign) -> List[str]:
+    """Flag explicit prompt requirements that are not evident in the generated design."""
+    warnings: List[str] = []
+    components_text = " ".join(
+        f"{component.name} {component.description} {component.package}"
+        for component in design.components
+    )
+    board_requirements = [
+        (r"\b(?:arduino\s*uno|uno)\b", r"\barduino\s*uno\b", "Arduino Uno"),
+        (r"\b(?:arduino\s*nano|nano)\b", r"\barduino\s*nano\b", "Arduino Nano"),
+        (r"\b(?:arduino\s*mega|mega\s*2560)\b", r"\barduino\s*mega|mega\s*2560\b", "Arduino Mega"),
+        (r"\besp[\s-]?32\b", r"\besp[\s-]?32\b", "ESP32"),
+        (r"\besp[\s-]?8266\b", r"\besp[\s-]?8266\b", "ESP8266"),
+        (r"\b(?:stm32|blackpill|nucleo)\b", r"\b(?:stm32|blackpill|nucleo)\b", "STM32"),
+        (r"\b(?:rp2040|raspberry\s*pi\s*pico|pico)\b", r"\b(?:rp2040|raspberry\s*pi\s*pico|pico)\b", "Raspberry Pi Pico / RP2040"),
+    ]
+    for requested, accepted, label in board_requirements:
+        if re.search(requested, prompt, re.IGNORECASE) and not re.search(accepted, components_text, re.IGNORECASE):
+            warnings.append(f"Prompt coverage: the request specifies {label}, but the generated component list does not clearly include that board.")
+
+    component_requirements = [
+        (r"\bbme\s*280\b", r"\bbme\s*280\b", "BME280"),
+        (r"\bmpu\s*6050\b", r"\bmpu\s*6050\b", "MPU6050"),
+        (r"\bmpu\s*6000\b", r"\bmpu\s*6000\b", "MPU6000"),
+        (r"\bdht\s*11\b", r"\bdht\s*11\b", "DHT11"),
+        (r"\bdht\s*22\b|\bam2302\b", r"\bdht\s*22\b|\bam2302\b", "DHT22 / AM2302"),
+        (r"\bds18b20\b", r"\bds18b20\b", "DS18B20"),
+        (r"\bhc[\s-]?sr04\b", r"\bhc[\s-]?sr04\b", "HC-SR04"),
+        (r"\bssd\s*1306\b", r"\bssd\s*1306\b", "SSD1306"),
+        (r"\boled\b", r"\boled\b|\bssd\s*1306\b|\bdisplay\b", "OLED display"),
+        (r"\bmax\s*98357a\b", r"\bmax\s*98357a\b", "MAX98357A"),
+        (r"\bl298n\b", r"\bl298n\b", "L298N"),
+        (r"\bled\b", r"\bled\b", "LED"),
+        (r"\bpush[\s-]?button\b|\btactile\s+button\b", r"\bbutton|switch\b", "pushbutton"),
+        (r"\brelay\b", r"\brelay\b", "relay"),
+        (r"\bservo(?:\s+motor)?\b", r"\bservo\b", "servo"),
+        (r"\bmotor\b", r"\bmotor\b", "motor"),
+    ]
+    for requested, accepted, label in component_requirements:
+        if not re.search(requested, prompt, re.IGNORECASE):
+            continue
+        matching_components = [
+            component for component in design.components
+            if re.search(accepted, f"{component.name} {component.description} {component.package}", re.IGNORECASE)
+        ]
+        if not matching_components:
+            warnings.append(f"Prompt coverage: the request names {label}, but no matching component is listed.")
+        elif not any(
+            mapping.componentId in {component.id for component in matching_components}
+            or mapping.sourceComponentId in {component.id for component in matching_components}
+            for mapping in design.pinMappings
+        ):
+            warnings.append(f"Prompt coverage: {label} is listed, but no pin mapping connects it to the circuit.")
+
+    requested_interfaces = [
+        (r"\bi\s*2\s*c(?:\s*\d+)?\b|\bi²c\b", "I2C"),
+        (r"\bi\s*2\s*s(?:\s*\d+)?\b|\bi²s\b", "I2S"),
+        (r"\bspi(?:\s*\d+)?\b", "SPI"),
+        (r"\buart(?:\s*\d+)?\b|\bserial\b", "UART"),
+        (r"\bpwm\b", "PWM"),
+        (r"\badc\b|\banalog\s+input\b", "ADC"),
+    ]
+    mapped_interfaces = {mapping.protocol for mapping in design.pinMappings}
+    for requested, protocol in requested_interfaces:
+        if re.search(requested, prompt, re.IGNORECASE) and protocol not in mapped_interfaces:
+            warnings.append(f"Prompt coverage: {protocol} is requested, but no {protocol} pin mapping is present.")
+
+    if re.search(r"\b(?:motor|relay|heater|solenoid)\b", prompt, re.IGNORECASE):
+        if not re.search(r"\b(?:motor\s+driver|h[\s-]?bridge|l298n|tb6612|drv8833|relay\s+driver|mosfet|transistor)\b", components_text, re.IGNORECASE):
+            warnings.append("Prompt coverage: the requested inductive/high-current load has no clearly identified driver or switching stage. Review this before connecting it to an MCU.")
+
+    if re.search(r"\bwi[\s-]?fi\b", prompt, re.IGNORECASE) and not re.search(r"\b(?:wi[\s-]?fi|esp[-\s]?now|wifi)\b", design.firmwareCode, re.IGNORECASE):
+        warnings.append("Prompt coverage: Wi-Fi is requested, but the firmware does not clearly configure or use Wi-Fi.")
+    if re.search(r"\b(?:bluetooth|ble)\b", prompt, re.IGNORECASE) and not re.search(r"\b(?:bluetooth|ble|nimble)\b", design.firmwareCode, re.IGNORECASE):
+        warnings.append("Prompt coverage: Bluetooth is requested, but the firmware does not clearly configure or use Bluetooth.")
+
+    def normalize_prompt_pin(pin: str) -> str:
+        normalized = re.sub(r"\s+", "", pin).upper()
+        return re.sub(r"^(?:GPIO|GP|D|A)(?=\d)", "", normalized)
+
+    requested_pins = {
+        normalize_prompt_pin(match.group(0))
+        for match in re.finditer(r"\b(?:GPIO\s*\d+|GP\d+|D\d+|A\d+|P[A-Z]\d+)\b", prompt, re.IGNORECASE)
+    }
+    mapped_pins = {
+        normalize_prompt_pin(pin)
+        for mapping in design.pinMappings
+        for pin in (mapping.mcuPin, mapping.sourceComponentPin or "")
+    }
+    missing_pins = sorted(requested_pins - mapped_pins)
+    if missing_pins:
+        warnings.append(f"Prompt coverage: requested pin(s) {', '.join(missing_pins)} are not present in the generated pin mappings.")
+
+    if re.search(r"\b(?:blink|blinking|flash|flashing)\b", prompt, re.IGNORECASE):
+        if not re.search(r"\bdigitalWrite\s*\(", design.firmwareCode, re.IGNORECASE) or not re.search(r"\bdelay\s*\(", design.firmwareCode, re.IGNORECASE):
+            warnings.append("Prompt coverage: the request describes a blinking/flashing output, but the firmware does not clearly contain both digitalWrite() and delay().")
+
+    if re.search(r"\b(?:push[\s-]?button|button)\b", prompt, re.IGNORECASE):
+        has_button = re.search(r"\bbutton|switch\b", components_text, re.IGNORECASE)
+        reads_input = re.search(r"\bdigitalRead\s*\(", design.firmwareCode, re.IGNORECASE)
+        if has_button and not reads_input:
+            warnings.append("Prompt coverage: a button is listed, but the firmware does not clearly read a digital input.")
+
+    if re.search(r"\b(?:display|oled|lcd|screen)\b", prompt, re.IGNORECASE):
+        if re.search(r"\b(?:display|oled|lcd|screen)\b", components_text, re.IGNORECASE) and not re.search(r"\b(?:display|lcd)\b", design.firmwareCode, re.IGNORECASE):
+            warnings.append("Prompt coverage: a display is listed, but the firmware does not clearly initialize or write to a display.")
+
+    if re.search(r"\b(?:battery|battery-powered)\b", prompt, re.IGNORECASE) and not re.search(r"\b(?:battery|cell|pack)\b", components_text, re.IGNORECASE):
+        warnings.append("Prompt coverage: the request specifies battery power, but no battery or cell is listed in the design.")
+
+    return warnings
 
 def ensure_design_support_parts(design: CircuitDesign) -> None:
     """Add missing I2C pull-ups and bypass capacitors with explicit pin mappings."""
@@ -761,11 +945,6 @@ def compile_firmware(req: CompileRequest):
 
 @app.post("/api/generate", response_model=CircuitDesign)
 def generate_circuit_endpoint(req: GenerateRequest):
-    if re.search(r"\b(?:push[ -]?button|button)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:blink|led)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
-        return make_button_led_design(req.prompt)
-    if re.search(r"\b(?:blink|flash)\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
-        return make_blink_led_design(req.prompt)
-
     # 1. Preset check
     if req.preset and req.preset in TEMPLATES:
         template = TEMPLATES[req.preset]
@@ -776,9 +955,24 @@ def generate_circuit_endpoint(req: GenerateRequest):
     # 2. If Gemini API key is present, try LLM synthesis
     api_key = os.getenv("GEMINI_API_KEY")
     if api_key and api_key != "your_gemini_api_key_here":
-        llm_design = generate_with_gemini(req.prompt, api_key)
-        if llm_design:
-            return llm_design
+        try:
+            design = generate_with_gemini(req.prompt, api_key)
+            design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
+            return design
+        except Exception as error:
+            raise HTTPException(
+                status_code=502,
+                detail="Gemini could not return a structurally valid design. Review the prompt and retry; no fallback circuit was substituted.",
+            ) from error
+
+    if re.search(r"\b(?:push[ -]?button|button)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:blink|led)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
+        design = make_button_led_design(req.prompt)
+        design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
+        return design
+    if re.search(r"\b(?:blink|flash)\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
+        design = make_blink_led_design(req.prompt)
+        design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
+        return design
 
     # 3. Intelligent fallback synthesis based on keywords
     prompt_lower = req.prompt.lower()
@@ -810,4 +1004,6 @@ def generate_circuit_endpoint(req: GenerateRequest):
         )
     )
     generated.drcReport = run_drc(generated)
+    generated.warnings.extend(prompt_coverage_warnings(req.prompt, generated))
+
     return generated

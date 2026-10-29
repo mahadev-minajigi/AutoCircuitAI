@@ -21,6 +21,7 @@ import ReactFlow, {
 } from 'reactflow';
 import type { Edge, Node, ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { analyzeFirmwareForSimulation, firmwareDrivesPin, getLedStatesAt, getOutputStateAt, normalizeFirmwarePin } from '../services/firmwareSimulation';
 
 interface SchematicViewerProps {
   design: CircuitDesign;
@@ -49,7 +50,7 @@ const SchematicIcNode = ({ data }: any) => {
           <span className="ic-name">{name}</span>
           {isSimulating && (
             <span className="live-status-badge">
-              <span className="live-pulse-dot" /> LIVE
+              <span className="live-pulse-dot" /> {data.simulationSupported ? 'MODEL' : 'VISUAL ONLY'}
             </span>
           )}
         </div>
@@ -68,9 +69,13 @@ const SchematicIcNode = ({ data }: any) => {
               </div>
               <div className="hardware-led-info">
                 <span className="hardware-label">
-                  LED Status: <strong style={{ color: data.ledState ? '#00ff88' : '#64748b' }}>{data.ledState ? 'ON (Glowing 20mA)' : 'OFF'}</strong>
+                  LED Status: <strong style={{ color: data.ledState === undefined ? '#64748b' : data.ledState ? '#087e8b' : '#64748b' }}>
+                    {data.ledState === undefined ? (data.isSimulating ? 'NOT SIMULATED' : 'PAUSED') : data.ledState ? 'ON · code output HIGH' : 'OFF · code output LOW'}
+                  </strong>
                 </span>
-                <span className="hardware-sublabel">Protected by 220Ω in series</span>
+                <span className="hardware-sublabel" title={data.simulationMessage}>
+                  {data.ledState === undefined ? 'Firmware output not modeled' : 'Visual model only · not a hardware measurement'}
+                </span>
               </div>
             </div>
           )}
@@ -81,9 +86,9 @@ const SchematicIcNode = ({ data }: any) => {
               <div className="oled-header-bar">SSD1306 128x64 OLED</div>
               <div className="oled-content-text">
                 <div>AutoCircuit AI</div>
-                <div className="oled-metric">T: {data.sensorTemp || '24.8'}°C | H: {data.sensorHum || '52'}%</div>
+                <div className="oled-metric">Sensor data: not simulated</div>
                 <div className="oled-bar-visual">
-                  <div className="oled-bar-fill" style={{ width: `${(data.sensorTemp || 25) * 2}%` }} />
+                  <div className="oled-bar-fill" style={{ width: '0%' }} />
                 </div>
               </div>
             </div>
@@ -93,12 +98,8 @@ const SchematicIcNode = ({ data }: any) => {
           {isSensor && !isOled && (
             <div className="live-sensor-telemetry">
               <div className="telemetry-item">
-                <span className="telemetry-label">Temp:</span>
-                <span className="telemetry-val">{data.sensorTemp || '24.8'}°C</span>
-              </div>
-              <div className="telemetry-item">
-                <span className="telemetry-label">Signal:</span>
-                <span className="telemetry-val" style={{ color: '#00ff88' }}>LOCK 400kHz</span>
+                <span className="telemetry-label">Sensor output:</span>
+                <span className="telemetry-val">Not simulated</span>
               </div>
             </div>
           )}
@@ -124,7 +125,7 @@ const SchematicIcNode = ({ data }: any) => {
           return (
             <div key={pinName} className="ic-pin-row">
               <Handle type="target" position={Position.Left} id={`pin-${pinName}`} className="schematic-pin-handle" style={{ top: `${82 + index * 25}px` }} />
-              <span className={`ic-pin-badge ${isPower ? 'pin-power' : isGnd ? 'pin-gnd' : isClock ? 'pin-clock' : isData ? 'pin-data' : ''} ${isSimulating ? 'pin-active-glow' : ''}`}>
+              <span className={`ic-pin-badge ${isPower ? 'pin-power' : isGnd ? 'pin-gnd' : isClock ? 'pin-clock' : isData ? 'pin-data' : ''} ${data.activePins?.includes(normalizeFirmwarePin(pinName)) ? 'pin-active-glow' : ''}`}>
                 <span className="pin-num">{index + 1}</span>
                 <span className="pin-lbl">{pinName}</span>
               </span>
@@ -169,28 +170,20 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<ReactFlowInstance | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  // Live Circuit Simulation States
   const [isSimulating, setIsSimulating] = useState(true);
-  const [ledState, setLedState] = useState(true);
-  const [sensorTemp, setSensorTemp] = useState(25.4);
+  const [simulationElapsed, setSimulationElapsed] = useState(0);
   const [showHandWiring, setShowHandWiring] = useState(false);
-  const hasLed = design.components.some(component => /\bled\b/i.test(component.name));
+  const simulationPlan = useMemo(
+    () => analyzeFirmwareForSimulation(design),
+    [design],
+  );
+  const ledStates = getLedStatesAt(simulationPlan, simulationElapsed);
 
-  // Live simulation tick: LED blinking, sensor data streaming
   useEffect(() => {
-    if (!isSimulating) return;
-
-    const interval = setInterval(() => {
-      setLedState(prev => !prev);
-      if (design.components.some(component => component.category === 'Sensor' && /bme|dht|bmp/i.test(component.name))) setSensorTemp(prev => {
-        const delta = (Math.random() - 0.5) * 0.4;
-        return parseFloat((prev + delta).toFixed(1));
-      });
-    }, 1200);
-
+    if (!isSimulating || !simulationPlan.isSupported) return undefined;
+    const interval = window.setInterval(() => setSimulationElapsed(value => value + 50), 50);
     return () => clearInterval(interval);
-  }, [isSimulating, design.components]);
+  }, [isSimulating, simulationPlan]);
 
   const { nodes, edges, netCount } = useMemo(() => {
     const mcu = design.components.find(c => c.category === 'MCU');
@@ -224,8 +217,9 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           pins: mcu.pins,
           isMCU: true,
           isSimulating,
-          ledState: hasLed && ledState,
-          sensorTemp
+          simulationSupported: simulationPlan.isSupported,
+          activePins: [...simulationPlan.outputPins].filter(pin => getOutputStateAt(simulationPlan, pin, simulationElapsed) === true),
+          simulationMessage: simulationPlan.message,
         }
       });
     }
@@ -244,8 +238,9 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           pins: comp.pins,
           isMCU: false,
           isSimulating,
-          ledState: hasLed && ledState,
-          sensorTemp
+          simulationSupported: simulationPlan.isSupported,
+          ledState: isSimulating ? ledStates.get(comp.id) : undefined,
+          simulationMessage: simulationPlan.message,
         }
       });
     });
@@ -296,18 +291,21 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         sourceHandle: `pin-${mapping.sourceComponentPin || mapping.mcuPin}`,
         targetHandle: `pin-${mapping.componentPin}`,
         type: 'smoothstep',
-        // Power and ground are static; only signal nets show visual activity.
-        animated: isSimulating && !['Power', 'GND'].includes(mapping.protocol),
+        animated: isSimulating
+          && firmwareDrivesPin(simulationPlan, mapping.mcuPin)
+          && getOutputStateAt(simulationPlan, mapping.mcuPin, simulationElapsed) === true,
         label: `${mapping.sourceComponentId ? `${sourceComponent.name}.${mapping.sourceComponentPin || mapping.mcuPin}` : mapping.mcuPin} → ${mapping.componentPin} · ${mapping.protocol}`,
-        labelStyle: { 
-          fill: color, 
-          fontWeight: 700, 
+        labelStyle: {
+          fill: '#17212b',
+          fontWeight: 700,
           fontSize: 11,
           fontFamily: 'JetBrains Mono, monospace'
         },
-        labelBgStyle: { 
-          fill: '#f8fafc', 
+        labelBgStyle: {
+          fill: '#ffffff',
           fillOpacity: 1,
+          stroke: color,
+          strokeWidth: 0.75,
           rx: 4,
           ry: 4
         },
@@ -322,7 +320,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
     });
 
     return { nodes: componentNodes, edges: schematicEdges, netCount: netCountSet.size };
-  }, [design, isSimulating, ledState, sensorTemp, showHandWiring]);
+  }, [design, isSimulating, ledStates, simulationElapsed, simulationPlan, showHandWiring]);
 
   useEffect(() => {
     const updateFullscreenState = () => {
@@ -355,12 +353,12 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
         <div>
           <h2>
             3D circuit overview
-            {isSimulating && <span className="live-simulation-tag"><Activity size={14} /> LIVE RUNNING</span>}
+            {isSimulating && <span className="live-simulation-tag"><Activity size={14} /> {simulationPlan.isSupported ? 'FIRMWARE MODEL' : 'NOT SIMULATED'}</span>}
           </h2>
-          <p>Rotate, zoom, and inspect the generated connections. Signal animation is a visual simulation, not a hardware measurement.</p>
+          <p>Rotate, zoom, and inspect the generated connections. {simulationPlan.message}</p>
         </div>
         <div className="schematic-counts">
-          <span className="badge badge-cyan">{design.components.length} IC Packages</span>
+          <span className="badge badge-cyan">{design.components.length} Components</span>
           <span className="badge badge-emerald">{netCount} Active Nets</span>
         </div>
       </div>
@@ -371,10 +369,10 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
           <button 
             className={`btn-sim-power ${isSimulating ? 'sim-on' : 'sim-off'}`}
             onClick={() => setIsSimulating(prev => !prev)}
-            title="Toggle Live Circuit Power"
+            title="Start or pause the visual firmware model"
           >
             {isSimulating ? <Square size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-            {isSimulating ? 'Simulation running' : 'Simulation paused'}
+            {isSimulating ? 'Pause visual model' : 'Run visual model'}
           </button>
 
           <button 
@@ -389,8 +387,8 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
 
         <div className="sim-live-metrics">
           <div className="sim-metric-pill">
-            <span className="metric-dot-live" style={{ background: isSimulating ? (ledState ? '#00ff88' : '#eab308') : '#64748b' }} />
-            <span>Visual signal: <strong>{isSimulating ? 'Active' : 'Paused'}</strong></span>
+            <span className="metric-dot-live" style={{ background: isSimulating && simulationPlan.isSupported ? '#087e8b' : '#64748b' }} />
+            <span>Firmware model: <strong>{!isSimulating ? 'Paused' : simulationPlan.isSupported ? 'Supported subset' : 'Not simulated'}</strong></span>
           </div>
           <div className="sim-metric-pill">
             <span>Mapped nets: <strong>{netCount}</strong></span>

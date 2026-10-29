@@ -22,7 +22,7 @@ export interface Component {
   estimatedCost: number;
   pins: string[];
   operatingVoltage?: number; // Added for DRC (e.g. 3.3 or 5)
-  maxCurrent_mA?: number;    // Added for DRC (e.g. 250)
+  maxCurrent_mA?: number;    // Estimated maximum operating current consumed in this design
   pinDescriptions?: Record<string, string>; // e.g. { "VCC": "3.3V Power", "SDA": "I2C Data" }
 }
 
@@ -54,4 +54,3 @@ export interface CircuitDesign {
   drcReport?: DrcRule[];
   labGuide?: LabGuide;
 }
-

@@ -37,6 +37,8 @@ flowchart LR
 - BOM with estimated costs displayed in Indian rupees (INR)
 - CSV, JSON, and firmware export from the header
 - Starter firmware examples for supported templates
+- Advisory prompt-coverage warnings for explicitly requested boards, named parts, interfaces, pins, and selected firmware behaviors not evident in the generated design
+- A limited firmware-driven visual model for straight-line `digitalWrite(HIGH/LOW)` and `delay()` calls in `loop()`, with mapped LED and GPIO state reflected in the schematic, 3D view, and output monitor
 - Design-specific conceptual PCB placement preview
 - Responsive layout with page scrolling and mobile stacking
 
@@ -82,7 +84,7 @@ The schematic should show four separate SPI routes: SCK, MISO, MOSI, and CS. The
 
 ## How Prompt Routing Works
 
-The generator first uses the configured Gemini service for custom requests. Without a Gemini key, it uses validated local examples for supported prompt types:
+Typed custom prompts use the configured Gemini service before keyword-based local routing. If Gemini returns an invalid design or the configured backend fails, the app reports the failure instead of silently substituting another circuit. If the backend cannot be reached at all, the browser may load a local fallback, and clearly marks it as potentially unrelated. Without a Gemini key, the backend uses local examples for supported prompt types. Quick-start preset cards intentionally load their fixed example designs:
 
 - Prompts containing `stm32`, `drone`, or `flight` use the STM32F405 flight-controller template.
 - Prompts containing `pico`, `rp2040`, `synth`, or `audio` use the RP2040 audio template.
@@ -162,6 +164,7 @@ The production build runs TypeScript project checks followed by the Vite product
 
 - The current generator uses local templates and keyword routing; it is not yet a general-purpose AI circuit synthesizer.
 - DRC is rule-based and intentionally limited to prototype-level checks.
+- The visual firmware model is not a C++ interpreter or electrical simulator. It only models straight-line `digitalWrite(HIGH/LOW)` and literal `delay(milliseconds)` statements in `loop()`; conditionals, input state, PWM, sensor behavior, and other firmware are reported as not simulated rather than guessed.
 - The PCB view is a conceptual placement preview, not a real netlist, autorouter, Gerber generator, or manufacturing layout.
 - Component prices are illustrative INR estimates, not live distributor prices.
 - Pin mappings should be checked against the target board, module datasheet, voltage requirements, pull-ups, decoupling, and current limits before building hardware.
