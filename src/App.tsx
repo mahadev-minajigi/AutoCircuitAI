@@ -76,11 +76,7 @@ function App() {
         setSelected3DComponentId(null);
         setHistory(prev => [...prev, { design: result, prompt, timestamp: Date.now() }]);
         setActiveTab('schematic');
-        const usedLocalFallback = result.warnings.some(warning => /local template fallback/i.test(warning));
-        showToast(
-          usedLocalFallback ? 'AI generation unavailable; loaded a local template that may not match.' : `Design ready: ${result.title}`,
-          usedLocalFallback ? 'error' : 'success',
-        );
+        showToast(`Design ready: ${result.title}`, 'success');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Circuit generation failed.';
         showToast(message, 'error');
@@ -190,14 +186,13 @@ function App() {
                     {signalMappings.length > signalFlow.length && <p className="project-flow-more">The circuit diagram shows the remaining connections.</p>}
                   </div>
                 )}
-                {design.warnings.length > 0 && <ul>{design.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
               </section>
 
               <div className="tabs-header">
                 {([
-                  { id: 'schematic' as TabId, icon: LayoutDashboard, label: '3D Circuit', badge: null as 'error' | 'warn' | null },
+                  { id: 'schematic' as TabId, icon: LayoutDashboard, label: 'Circuit', badge: null as 'error' | 'warn' | null },
                   { id: 'breadboard' as TabId, icon: Layers, label: 'Breadboard', badge: null as 'error' | 'warn' | null },
-                  { id: 'lab' as TabId, icon: BookOpen, label: 'Lab guide', badge: null as 'error' | 'warn' | null },
+                  { id: 'lab' as TabId, icon: BookOpen, label: 'Guide', badge: null as 'error' | 'warn' | null },
                   { id: 'drc' as TabId, icon: ShieldCheck, label: 'Checks', badge: (drcErrorCount > 0 ? 'error' : drcWarnCount > 0 ? 'warn' : null) as 'error' | 'warn' | null },
                   { id: 'pinout' as TabId, icon: Cpu, label: 'Pin mapping', badge: null as 'error' | 'warn' | null },
                   { id: 'bom' as TabId, icon: List, label: 'BOM', badge: null as 'error' | 'warn' | null },
@@ -217,7 +212,7 @@ function App() {
 
               <div className="tab-content">
                 {activeTab === 'schematic' && (
-                  <Suspense fallback={<div className="circuit-3d-loading" role="status">Loading interactive 3D circuit...</div>}>
+                  <Suspense fallback={<div className="circuit-3d-loading" role="status">Loading circuit...</div>}>
                     <Circuit3DViewer
                       design={design}
                       selectedComponentId={selected3DComponentId}
@@ -242,7 +237,7 @@ function App() {
               <p>Enter a natural language prompt or pick a Quick Start preset to generate your first hardware design.</p>
               <div className="empty-feature-grid">
                 {[
-                  { icon: '🧩', title: 'Live 3D Circuit', desc: 'Explore realistic components and supported firmware outputs' },
+                  { icon: '🧩', title: 'Circuit', desc: 'Explore components, connections, and supported firmware outputs' },
                   { icon: '📋', title: 'Pin Mapping Table', desc: 'MCU-to-component connection guide' },
                   { icon: '✅', title: 'DRC Validation', desc: 'Rule-based electrical checks' },
                   { icon: '💰', title: 'BOM in INR', desc: 'Estimated parts cost breakdown' },

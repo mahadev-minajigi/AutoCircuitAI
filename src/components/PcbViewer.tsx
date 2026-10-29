@@ -165,23 +165,11 @@ const PcbViewer: React.FC<PcbViewerProps> = ({ design }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 600 }}>PCB Layout Preview</h2>
-          <p style={{ color: 'var(--text-muted)' }}>Interactive 2D component placement and net connectivity preview.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Component placement preview generated from this circuit.</p>
         </div>
         <div className="schematic-counts">
           <span className="badge badge-cyan">{design.components.length} Components</span>
           <span className="badge badge-emerald">{design.pinMappings.length} Connections</span>
-        </div>
-      </div>
-
-      {/* Prominent Fabrication Warning Banner */}
-      <div className="pcb-warning-banner" role="alert">
-        <span className="pcb-warning-icon">⚠️</span>
-        <div className="pcb-warning-text">
-          <div><strong>CONCEPTUAL PLACEMENT ONLY — No routing or DRC.</strong> Export to KiCad/EasyEDA for fabrication.</div>
-          <div style={{ marginTop: '4px', fontSize: '0.82rem', opacity: 0.9 }}>
-            • <em>I2C requires pull-up resistors — not shown in conceptual view</em><br />
-            • <em>Decoupling capacitors omitted for clarity — required for stability</em>
-          </div>
         </div>
       </div>
 

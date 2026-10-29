@@ -196,7 +196,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
       UART: '#a855f7',
       I2S: '#06b6d4',
       PWM: '#f97316',
-      ADC: '#10b981',
+      ADC: '#166534',
       GPIO: '#00f0ff'
     };
 
@@ -351,7 +351,7 @@ const SchematicViewer: React.FC<SchematicViewerProps> = ({ design }) => {
       <div className="schematic-heading">
         <div>
           <h2>
-            3D circuit overview
+            Circuit overview
             {isSimulating && <span className="live-simulation-tag"><Activity size={14} /> {simulationPlan.isSupported ? 'FIRMWARE MODEL' : 'NOT SIMULATED'}</span>}
           </h2>
           <p>Rotate, zoom, and inspect the generated connections. {simulationPlan.message}</p>

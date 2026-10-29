@@ -478,8 +478,8 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     } catch (error) {
-      console.error('Unable to initialize the 3D circuit renderer.', error);
-      setRenderError('3D rendering is unavailable in this browser. Enable WebGL or use a browser with graphics acceleration.');
+      console.error('Unable to initialize the interactive circuit renderer.', error);
+      setRenderError('The interactive circuit view is unavailable in this browser. Enable WebGL or use a browser with graphics acceleration.');
       return undefined;
     }
 
@@ -488,7 +488,7 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.domElement.setAttribute('aria-label', 'Interactive 3D circuit board. Drag to orbit and select component labels for details.');
+    renderer.domElement.setAttribute('aria-label', 'Interactive circuit board. Drag to rotate and select components for details.');
     renderer.domElement.tabIndex = 0;
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -773,16 +773,16 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
   const formattedTime = `${(timelineValue / 1000).toFixed(2)}s / ${(timelineDuration / 1000).toFixed(2)}s`;
 
   return (
-    <section className="circuit-3d-viewer" aria-label="Interactive 3D circuit view">
+    <section className="circuit-3d-viewer" aria-label="Interactive circuit view">
       <header className="circuit-3d-heading">
-        <div><span className="workspace-eyebrow">PROMPT-GENERATED CIRCUIT · 3D + TIME</span><h2>{design.title}</h2><p>Drag to orbit · Right-drag to pan · Scroll to zoom · Scrub the firmware timeline to inspect modeled outputs</p></div>
+        <div><span className="workspace-eyebrow">PROMPT-GENERATED CIRCUIT</span><h2>{design.title}</h2><p>Drag to rotate · Right-drag to pan · Scroll to zoom · Scrub the firmware timeline to inspect modeled outputs</p></div>
         <span className="circuit-3d-component-count"><strong>{componentCount}</strong> parts <i /> <strong>{connectionCount}</strong> connections</span>
       </header>
 
       <div className="circuit-3d-stage">
         <div className="circuit-3d-canvas" ref={mountRef} />
         {renderError && <div className="circuit-3d-error" role="alert">{renderError}</div>}
-        <div className="circuit-3d-controls" aria-label="3D camera controls">
+        <div className="circuit-3d-controls" aria-label="Circuit view controls">
           <button onClick={() => rotate(-1)} title="Rotate left" aria-label="Rotate left"><RotateCcw size={17} /></button>
           <button onClick={() => zoom(1.12)} title="Zoom out" aria-label="Zoom out"><Minus size={18} /></button>
           <button onClick={() => zoom(0.89)} title="Zoom in" aria-label="Zoom in"><Plus size={18} /></button>
@@ -791,7 +791,7 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
           <button className={camera.labels ? 'selected' : ''} onClick={() => setCamera(current => ({ ...current, labels: !current.labels }))} title="Toggle component labels" aria-label="Toggle component labels"><Sparkles size={16} /></button>
           <button className={camera.powered ? 'powered' : ''} onClick={togglePowered} title={camera.powered ? 'Pause visual simulation' : 'Run visual simulation'} aria-label={camera.powered ? 'Pause simulation' : 'Run simulation'}><Zap size={17} /></button>
         </div>
-        <div className="circuit-3d-tip" title={simulationPlan.message}><span>3D</span> {camera.powered ? (simulationPlan.isSupported ? 'Firmware outputs · visual model' : 'Firmware not simulated') : 'Visual simulation paused'} · {mcu?.name ?? 'Board not identified'}</div>
+        <div className="circuit-3d-tip" title={simulationPlan.message}>{camera.powered ? (simulationPlan.isSupported ? 'Firmware outputs · visual model' : 'Firmware not simulated') : 'Visual simulation paused'} · {mcu?.name ?? 'Board not identified'}</div>
       </div>
       <div className={`circuit-3d-timeline ${simulationPlan.isSupported ? 'is-supported' : ''}`}>
         <div className="circuit-3d-timeline-heading">

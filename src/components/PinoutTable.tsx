@@ -13,7 +13,7 @@ const protocolBadges: Record<string, { bg: string; text: string; border: string 
   I2C: { bg: 'rgba(234, 179, 8, 0.15)', text: '#eab308', border: '#ca8a04' },
   SPI: { bg: 'rgba(59, 130, 246, 0.15)', text: '#3b82f6', border: '#2563eb' },
   UART: { bg: 'rgba(168, 85, 247, 0.15)', text: '#a855f7', border: '#9333ea' },
-  ADC: { bg: 'rgba(16, 185, 129, 0.15)', text: '#10b981', border: '#059669' },
+  ADC: { bg: 'rgba(16, 185, 129, 0.15)', text: '#166534', border: '#166534' },
   PWM: { bg: 'rgba(249, 115, 22, 0.15)', text: '#f97316', border: '#ea580c' },
   I2S: { bg: 'rgba(6, 182, 212, 0.15)', text: '#06b6d4', border: '#0891b2' },
   GPIO: { bg: 'rgba(100, 116, 139, 0.15)', text: '#cbd5e1', border: '#475569' }
@@ -84,7 +84,7 @@ const PinoutTable: React.FC<PinoutTableProps> = ({ design, onShowToast }) => {
             <span><strong style={{ color: '#94a3b8' }}>Black:</strong> GND Ground</span>
             <span><strong style={{ color: '#eab308' }}>Yellow:</strong> SCL / Clock</span>
             <span><strong style={{ color: '#3b82f6' }}>Blue:</strong> SDA / Data</span>
-            <span><strong style={{ color: '#22c55e' }}>Green:</strong> MISO / RX</span>
+            <span><strong style={{ color: '#166534' }}>Green:</strong> MISO / RX</span>
             <span><strong style={{ color: '#a855f7' }}>Purple:</strong> CS / Chip Select</span>
           </div>
         </div>

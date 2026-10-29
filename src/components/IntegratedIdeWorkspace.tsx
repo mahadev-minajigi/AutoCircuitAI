@@ -75,7 +75,7 @@ const IntegratedIdeWorkspace: React.FC<IntegratedIdeWorkspaceProps> = ({
 
       <section className="circuit-ide-workspace" ref={circuitRef} aria-label="Generated circuit and design details">
         <div className="circuit-ide-viewer">
-          <Suspense fallback={<div className="circuit-3d-loading" role="status">Loading interactive 3D circuit...</div>}>
+          <Suspense fallback={<div className="circuit-3d-loading" role="status">Loading circuit...</div>}>
             <Circuit3DViewer
               design={design}
               selectedComponentId={selectedComponentId}

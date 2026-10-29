@@ -38,11 +38,11 @@ const LabGuideView: React.FC<LabGuideViewProps> = ({ design, onShowToast }) => {
       <div className="lab-guide-header">
         <div className="lab-guide-title-block">
           <div className="lab-guide-badge">
-            <BookOpen size={16} /> College IoT & Embedded Lab Manual
+            <BookOpen size={16} /> Project Guide
           </div>
-          <h2>Practical Lab Implementation Guide</h2>
+          <h2>Build and Connection Guide</h2>
           <p className="lab-guide-subtitle">
-            Step-by-step physical breadboard wiring, pin-level testing, electrical safety precautions, and lab debugging procedure for <strong>{design.title}</strong>.
+            Parts, complete pin connections, assembly, testing, and troubleshooting for <strong>{design.title}</strong>.
           </p>
         </div>
 
@@ -98,11 +98,40 @@ const LabGuideView: React.FC<LabGuideViewProps> = ({ design, onShowToast }) => {
         </ul>
       </div>
 
+      <div className="lab-section-card">
+        <div className="lab-section-header">
+          <Layers size={20} className="lab-icon-cyan" />
+          <h3>2. Every Circuit Connection</h3>
+        </div>
+        {design.pinMappings.length > 0 ? (
+          <div className="lab-connection-list">
+            {design.pinMappings.map((mapping, index) => {
+              const target = design.components.find(component => component.id === mapping.componentId);
+              const source = mapping.sourceComponentId
+                ? design.components.find(component => component.id === mapping.sourceComponentId)
+                : mcu;
+              const sourcePin = mapping.sourceComponentPin || mapping.mcuPin;
+              return (
+                <div className="lab-connection-row" key={`${mapping.componentId}-${mapping.componentPin}-${index}`}>
+                  <span className="lab-connection-protocol">{mapping.protocol}</span>
+                  <strong>{source?.name || 'Source'} · {sourcePin}</strong>
+                  <span className="lab-connection-arrow">→</span>
+                  <strong>{target?.name || mapping.componentId} · {mapping.componentPin}</strong>
+                  <small>{mapping.description}</small>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="lab-section-desc">No pin connections are listed for this design.</p>
+        )}
+      </div>
+
       {/* Detailed Pin-by-Pin Component Breakdown for Students */}
       <div className="lab-section-card">
         <div className="lab-section-header">
           <Wrench size={20} className="lab-icon-emerald" />
-          <h3>2. Component Pin Reference & Electrical Functions</h3>
+          <h3>3. Component Pin Reference & Electrical Functions</h3>
         </div>
         <p className="lab-section-desc">
           Understand what each pin on the component does before plugging it into the board:
@@ -141,7 +170,7 @@ const LabGuideView: React.FC<LabGuideViewProps> = ({ design, onShowToast }) => {
       <div className="lab-section-card">
         <div className="lab-section-header">
           <ClipboardCheck size={20} className="lab-icon-amber" />
-          <h3>3. Step-by-Step Breadboard Assembly Instructions</h3>
+          <h3>4. Step-by-Step Breadboard Assembly Instructions</h3>
         </div>
         <p className="lab-section-desc">
           Check off each step as you complete it at your lab workbench:
@@ -158,7 +187,7 @@ const LabGuideView: React.FC<LabGuideViewProps> = ({ design, onShowToast }) => {
             {
               stepNumber: 2,
               title: 'Connect Power and Ground Rails',
-              instruction: `Run a jumper from ${mcu?.name || 'MCU'} 3.3V to the breadboard (+) red rail, and GND to the (-) blue rail.`,
+              instruction: `Run a jumper from ${mcu?.name || 'MCU'} ${mcu?.operatingVoltage || 3.3}V to the breadboard (+) red rail, and GND to the (-) blue rail.`,
               caution: 'Double check polarity before powering on.'
             },
             {
@@ -200,7 +229,7 @@ const LabGuideView: React.FC<LabGuideViewProps> = ({ design, onShowToast }) => {
       <div className="lab-section-card">
         <div className="lab-section-header">
           <CheckCircle2 size={20} className="lab-icon-emerald" />
-          <h3>4. Practical Verification & Testing Procedure</h3>
+          <h3>5. Practical Verification & Testing Procedure</h3>
         </div>
         <ol className="lab-procedure-list">
           {(guide?.testingProcedure || [
@@ -222,7 +251,7 @@ const LabGuideView: React.FC<LabGuideViewProps> = ({ design, onShowToast }) => {
       <div className="lab-section-card">
         <div className="lab-section-header">
           <HelpCircle size={20} className="lab-icon-rose" />
-          <h3>5. Common Lab Mistakes & Troubleshooting</h3>
+          <h3>6. Common Lab Mistakes & Troubleshooting</h3>
         </div>
         <div className="lab-troubleshooting-grid">
           {(guide?.troubleshootingTips || [

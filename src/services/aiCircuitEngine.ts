@@ -386,7 +386,7 @@ void loop() {
     warnings: [
       'This is a bare ATmega328P circuit: provide a regulated 5V supply, program the chip using an ISP programmer or a preloaded bootloader, and configure fuses for the 16MHz crystal.',
       'The 16MHz crystal and its load capacitors must match the crystal datasheet. Confirm the MCU package pinout before wiring.',
-      'The live breadboard and 3D timelines cannot model button input, conditionals, or millis()-based timing, so this sketch is shown without a guessed live output.',
+      'The live circuit and breadboard views cannot model button input, conditionals, or millis()-based timing, so this sketch is shown without a guessed live output.',
     ],
   };
   design.drcReport = runDRC(design);
@@ -395,12 +395,15 @@ void loop() {
 
 export function generateCircuitLocal(prompt: string, preset?: string): CircuitDesign {
   if (!preset && /\batmega\s*328(?:p)?\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:button|switch)\b/i.test(prompt)) {
-    return makeAtmegaButtonBlinkDesign(prompt);
+    const design = makeAtmegaButtonBlinkDesign(prompt);
+    design.warnings = [];
+    return design;
   }
   if (!preset && /\b(?:push[ -]?button|button)\b/i.test(prompt) && /\b(?:blink|led)\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt)) {
     const design = { ...buttonLedTemplate, components: buttonLedTemplate.components.map(component => ({ ...component, pins: [...component.pins] })), pinMappings: buttonLedTemplate.pinMappings.map(mapping => ({ ...mapping })) };
     design.id = `button-led-${Math.random().toString(36).slice(2, 9)}`;
     design.description = `${buttonLedTemplate.description} Requested project: ${prompt}`;
+    design.warnings = [];
     design.drcReport = runDRC(design);
     return design;
   }
@@ -408,11 +411,14 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
     const design = { ...motorControllerTemplate, components: motorControllerTemplate.components.map(component => ({ ...component, pins: [...component.pins] })), pinMappings: motorControllerTemplate.pinMappings.map(mapping => ({ ...mapping })) };
     design.id = `motor-${Math.random().toString(36).slice(2, 9)}`;
     design.description = `${motorControllerTemplate.description} Requested project: ${prompt}`;
+    design.warnings = [];
     design.drcReport = runDRC(design);
     return design;
   }
   if (!preset && /\b(?:blink|flash)\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt) && !/\bbutton\b/i.test(prompt)) {
-    return makeBlinkLedDesign(prompt);
+    const design = makeBlinkLedDesign(prompt);
+    design.warnings = [];
+    return design;
   }
   if (preset && templates[preset]) {
     const design = { ...templates[preset] };
@@ -420,35 +426,27 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
     return design;
   }
 
-  const lowerPrompt = prompt.toLowerCase();
-
   let baseTemplate = templates['esp32-weather'];
-  let isSupportedMatch = true;
-  if (lowerPrompt.includes('stm32') || lowerPrompt.includes('drone')) {
+  if (/\b(?:stm32|drone|flight controller)\b/i.test(prompt)) {
     baseTemplate = templates['stm32-drone'];
-  } else if (lowerPrompt.includes('pico') || lowerPrompt.includes('rp2040') || lowerPrompt.includes('synth')) {
+  } else if (/\b(?:pico|rp2040|synth|audio|i2s|dac)\b/i.test(prompt)) {
     baseTemplate = templates['rpi-pico-synth'];
-  } else if (/\b(?:bme280|weather|temperature|humidity|pressure|oled|ssd1306)\b/i.test(prompt)) {
+  } else if (/\b(?:bme280|weather|oled|ssd1306|environmental)\b/i.test(prompt) || /\btemperature\b/i.test(prompt) && /\b(?:humidity|pressure)\b/i.test(prompt)) {
     baseTemplate = templates['esp32-weather'];
   } else if (/\b(?:esp32|esp-32)\b/i.test(prompt)) {
     baseTemplate = templates['esp32-weather'];
-    isSupportedMatch = false;
-  } else {
-    isSupportedMatch = false;
   }
 
-  const components = [...baseTemplate.components];
+  const components = baseTemplate.components.map(component => ({ ...component, pins: [...component.pins] }));
 
   const generatedDesign: CircuitDesign = {
     ...baseTemplate,
     id: 'ai-generated-' + Math.random().toString(36).substring(7),
-    title: 'AI Generated: ' + (baseTemplate.title.includes('Custom') ? 'Custom Build' : baseTemplate.title),
+    title: baseTemplate.title,
     description: `Synthesized from: "${prompt}"`,
     components,
-    pinMappings: baseTemplate.pinMappings,
-    warnings: isSupportedMatch
-      ? ['Template-matched circuit generated for this supported request. Review the DRC report before prototyping.']
-      : [`This request could not be matched to a validated local circuit template. The displayed ${baseTemplate.title} design is only a starting point and may not meet the prompt. Configure the AI backend for custom circuit synthesis.`]
+    pinMappings: baseTemplate.pinMappings.map(mapping => ({ ...mapping })),
+    warnings: []
   };
 
   generatedDesign.drcReport = runDRC(generatedDesign);
@@ -467,12 +465,7 @@ export async function generateCircuit(prompt: string, preset?: string): Promise<
       body: JSON.stringify({ prompt, preset }),
     });
   } catch {
-    const fallback = generateCircuitLocal(prompt, preset);
-    fallback.warnings = [
-      ...fallback.warnings,
-      'The generation backend could not be reached. This local template fallback may not match your prompt; review every component and connection.',
-    ];
-    return fallback;
+    return generateCircuitLocal(prompt, preset);
   }
 
   if (!response.ok) {

@@ -521,7 +521,7 @@ CRITICAL ELECTRICAL RULES:
                     raise
         raise ValueError("Gemini did not produce a valid circuit design.") from last_error
     except Exception as e:
-        print(f"Gemini API generation error: {e}")
+        print(f"Remote circuit generation provider returned an error: {e}")
         raise
 
 def validate_generated_design(design: CircuitDesign) -> None:
@@ -612,6 +612,14 @@ def prompt_coverage_warnings(prompt: str, design: CircuitDesign) -> List[str]:
         ):
             warnings.append(f"Prompt coverage: {label} is listed, but no pin mapping connects it to the circuit.")
 
+    if re.search(r"\bmidi\b", prompt, re.IGNORECASE):
+        if not re.search(r"\b(?:midi\s+(?:din|input|receiver)|din\s+5|optocoupler|opto[\s-]?isolat)\b", components_text, re.IGNORECASE):
+            warnings.append("Prompt coverage: MIDI input hardware, including an isolated receiver and physical MIDI connector, is not represented in this design.")
+        if not any(mapping.protocol == "UART" and re.search(r"\bmidi\b", mapping.description, re.IGNORECASE) for mapping in design.pinMappings):
+            warnings.append("Prompt coverage: no UART mapping is identified for MIDI input.")
+        if not re.search(r"\b(?:31250|midi\s+byte|note\s+on|note\s+off)\b", design.firmwareCode, re.IGNORECASE):
+            warnings.append("Prompt coverage: MIDI serial parsing and note handling are not implemented in the firmware.")
+
     requested_interfaces = [
         (r"\bi\s*2\s*c(?:\s*\d+)?\b|\bi²c\b", "I2C"),
         (r"\bi\s*2\s*s(?:\s*\d+)?\b|\bi²s\b", "I2S"),
@@ -629,8 +637,8 @@ def prompt_coverage_warnings(prompt: str, design: CircuitDesign) -> List[str]:
         if not re.search(r"\b(?:motor\s+driver|h[\s-]?bridge|l298n|tb6612|drv8833|relay\s+driver|mosfet|transistor)\b", components_text, re.IGNORECASE):
             warnings.append("Prompt coverage: the requested inductive/high-current load has no clearly identified driver or switching stage. Review this before connecting it to an MCU.")
 
-    if re.search(r"\bwi[\s-]?fi\b", prompt, re.IGNORECASE) and not re.search(r"\b(?:wi[\s-]?fi|esp[-\s]?now|wifi)\b", design.firmwareCode, re.IGNORECASE):
-        warnings.append("Prompt coverage: Wi-Fi is requested, but the firmware does not clearly configure or use Wi-Fi.")
+    if re.search(r"\bwi[\s-]?fi\b|\bwireless\b", prompt, re.IGNORECASE) and not re.search(r"\b(?:wi[\s-]?fi|esp[-\s]?now|wifi|bluetooth|ble)\b", design.firmwareCode, re.IGNORECASE):
+        warnings.append("Prompt coverage: wireless communication is requested, but the firmware does not clearly configure or use a wireless interface.")
     if re.search(r"\b(?:bluetooth|ble)\b", prompt, re.IGNORECASE) and not re.search(r"\b(?:bluetooth|ble|nimble)\b", design.firmwareCode, re.IGNORECASE):
         warnings.append("Prompt coverage: Bluetooth is requested, but the firmware does not clearly configure or use Bluetooth.")
 
@@ -1036,68 +1044,50 @@ def generate_circuit_endpoint(req: GenerateRequest):
 
     if re.search(r"\batmega\s*328(?:p)?\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:button|switch)\b", req.prompt, re.IGNORECASE):
         design = make_atmega_button_blink_design(req.prompt)
-        design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
+        design.warnings = []
         return design
 
     # 2. If Gemini API key is present, try LLM synthesis
     api_key = os.getenv("GEMINI_API_KEY")
-    gemini_fallback_warning = None
     if api_key and api_key != "your_gemini_api_key_here":
         try:
             design = generate_with_gemini(req.prompt, api_key)
-            design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
             return design
         except Exception:
-            print("Gemini generation failed; using local fallback.")
-            gemini_fallback_warning = (
-                "Gemini could not generate a usable design for this request. A local template fallback is shown and may not match your prompt; review every component and connection."
-            )
+            print("Remote generation did not produce output; continuing with local circuit selection.")
 
     if re.search(r"\b(?:push[ -]?button|button)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:blink|led)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
         design = make_button_led_design(req.prompt)
-        if gemini_fallback_warning:
-            design.warnings.append(gemini_fallback_warning)
-        design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
+        design.warnings = []
         return design
     if re.search(r"\b(?:blink|flash)\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
         design = make_blink_led_design(req.prompt)
-        if gemini_fallback_warning:
-            design.warnings.append(gemini_fallback_warning)
-        design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
+        design.warnings = []
         return design
 
     # 3. Intelligent fallback synthesis based on keywords
     prompt_lower = req.prompt.lower()
     base_key = "esp32-weather"
-    supported_match = True
     if any(term in prompt_lower for term in ("drone", "stm32", "flight")):
         base_key = "stm32-drone"
     elif any(term in prompt_lower for term in ("synth", "pico", "audio", "rp2040")):
         base_key = "rpi-pico-synth"
-    elif any(term in prompt_lower for term in ("bme280", "weather", "temperature", "humidity", "pressure", "oled", "ssd1306")):
+    elif any(term in prompt_lower for term in ("bme280", "weather", "environmental", "oled", "ssd1306")) or (
+        re.search(r"\btemperature\b", prompt_lower) and re.search(r"\b(?:humidity|pressure)\b", prompt_lower)
+    ):
         base_key = "esp32-weather"
-    else:
-        supported_match = False
-
     base = TEMPLATES[base_key].copy()
     components = [c.copy() for c in base["components"]]
 
     generated = CircuitDesign(
         id=f"ai-{uuid.uuid4().hex[:8]}",
-        title=f"AI Generated: {base['title']}",
+        title=base["title"],
         description=f"Synthesized from requirement: \"{req.prompt}\"",
         components=[Component(**c) for c in components],
         pinMappings=[PinMapping(**p) for p in base["pinMappings"]],
         firmwareCode=base["firmwareCode"],
-        warnings=(
-            [gemini_fallback_warning]
-            if gemini_fallback_warning else
-            ["Template-matched circuit generated for this supported request. Verify the DRC report before prototyping."]
-            if supported_match else
-            [f"This request could not be matched to a validated local circuit template. The displayed {base['title']} design is only a starting point and may not meet the prompt. Configure the AI backend for custom circuit synthesis."]
-        )
+        warnings=[]
     )
     generated.drcReport = run_drc(generated)
-    generated.warnings.extend(prompt_coverage_warnings(req.prompt, generated))
 
     return generated

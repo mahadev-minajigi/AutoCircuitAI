@@ -25,22 +25,34 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
     let animationFrame = 0;
     let previousFrameTime = 0;
     let lastTimeUpdate = 0;
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+    let canvasDpr = 0;
 
     const drawBreadboard = (timeMs: number) => {
-      const width = canvas.parentElement?.clientWidth || 900;
-      const height = 580;
+      const width = Math.max(canvas.clientWidth || canvas.parentElement?.clientWidth || 900, 760);
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+
+      const boardWidth = Math.min(width - 40, 960);
+      const primaryModules = design.components.filter(component => component.id !== mcu?.id);
+      const availableWidth = Math.max(boardWidth - 270, 150);
+      const columns = Math.max(1, Math.floor(availableWidth / 155));
+      const rows = Math.max(1, Math.ceil(primaryModules.length / columns));
+      const boardHeight = Math.max(440, 250 + (rows - 1) * 112);
+      const height = boardHeight + 100;
+      if (width !== canvasWidth || height !== canvasHeight || dpr !== canvasDpr) {
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.height = `${height}px`;
+        canvasWidth = width;
+        canvasHeight = height;
+        canvasDpr = dpr;
+      }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Dark background
       ctx.fillStyle = '#e9eff3';
       ctx.fillRect(0, 0, width, height);
 
-      // Breadboard dimensions
-      const boardWidth = Math.min(width - 40, 840);
-      const boardHeight = 440;
       const startX = (width - boardWidth) / 2;
       const startY = 40;
 
@@ -200,14 +212,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.fillStyle = '#94a3b8';
       ctx.fillRect(mcuX - 8, mcuY + mcuHeight / 2 - 8, 8, 16);
 
-      // Place every modeled component, including regulators and passives.
-      const primaryModules = design.components.filter(c => c.id !== mcu?.id);
-
       const compPositions: { id: string; name: string; x: number; y: number; w: number; h: number; isOled: boolean; isSensor: boolean; isLed: boolean }[] = [];
-
-      // Compute slot spacing based on number of primary modules
-      const availableWidth = Math.max(boardWidth - (mcuWidth + 120), 140);
-      const modSpacing = Math.min(160, availableWidth / Math.max(primaryModules.length, 1));
 
       primaryModules.forEach((comp, idx) => {
         const isPassive = comp.category === 'Passive';
@@ -218,9 +223,9 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
         
         const pw = isPassive ? 88 : isOled ? 130 : isLed ? 88 : 108;
         const ph = isPassive ? 54 : isOled ? 95 : isLed ? 68 : 75;
-        const columns = Math.max(1, Math.floor(availableWidth / 150));
-        const px = startX + 235 + (idx % columns) * Math.min(150, modSpacing);
-        const py = startY + 95 + Math.floor(idx / columns) * 105;
+        const slotWidth = availableWidth / columns;
+        const px = startX + 230 + (idx % columns) * slotWidth + (slotWidth - pw) / 2;
+        const py = startY + 82 + Math.floor(idx / columns) * 112;
 
         compPositions.push({ id: comp.id, name: comp.name, x: px, y: py, w: pw, h: ph, isOled, isSensor, isLed });
 
@@ -427,7 +432,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
     <div className="breadboard-view-container">
       <div className="breadboard-header">
         <div>
-          <h2>Live breadboard · 3D + time</h2>
+          <h2>Breadboard wiring</h2>
           <p>Component glow and signal pulses follow the supported firmware model. This is a visual wiring preview, not an electrical simulation.</p>
         </div>
         <div className="schematic-counts">
