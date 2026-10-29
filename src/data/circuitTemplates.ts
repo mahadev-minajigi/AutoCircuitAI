@@ -363,7 +363,7 @@ void loop() {
   'stm32-drone': {
     id: 't-stm32-drone',
     title: 'STM32 Drone Flight Controller',
-    description: 'High-performance flight controller using STM32F401/F405, MPU6000 6-DOF IMU over high-speed SPI, and BEC power management.',
+    description: 'STM32F401 flight-controller hardware with an MPU6000 connected over SPI and four timer PWM outputs connected to brushless-motor ESC signal inputs.',
     components: [
       {
         id: 'u1',
@@ -372,7 +372,7 @@ void loop() {
         category: 'MCU',
         package: 'UFQFPN-48 Module',
         estimatedCost: 320.00,
-        pins: ['5V', '3V3', 'GND', 'PA4', 'PA5', 'PA6', 'PA7', 'PB6', 'PB7'],
+        pins: ['5V', '3V3', 'GND', 'PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PB6', 'PB7'],
         operatingVoltage: 3.3,
         maxCurrent_mA: 100,
         pinDescriptions: {
@@ -383,6 +383,10 @@ void loop() {
           'PA5': 'SPI1 SCK (Serial Clock up to 42MHz)',
           'PA6': 'SPI1 MISO (Master In Slave Out)',
           'PA7': 'SPI1 MOSI (Master Out Slave In)',
+          'PA0': 'TIM2_CH1 PWM output to ESC 1 signal input',
+          'PA1': 'TIM2_CH2 PWM output to ESC 2 signal input',
+          'PA2': 'TIM2_CH3 PWM output to ESC 3 signal input',
+          'PA3': 'TIM2_CH4 PWM output to ESC 4 signal input',
           'PB6': 'I2C1 SCL (Auxiliary Barometer / Compass bus)',
           'PB7': 'I2C1 SDA (Auxiliary Barometer / Compass bus)'
         }
@@ -415,12 +419,22 @@ void loop() {
         estimatedCost: 120.00,
         pins: ['VIN', 'VOUT', 'GND'],
         operatingVoltage: 5.0,
-        maxCurrent_mA: 3000,
         pinDescriptions: {
           'VIN': 'Direct Battery Voltage (7.4V - 25.2V from LiPo)',
           'VOUT': 'Regulated 5.0V output to MCU 5V pin / ESC servo rail',
           'GND': 'Common Ground'
         }
+      },
+      {
+        id: 'battery1',
+        name: '3S-4S LiPo battery input',
+        description: 'Flight battery supply for the BEC and four ESC power inputs; battery voltage depends on the selected cell count.',
+        category: 'Power',
+        package: 'Battery connector',
+        estimatedCost: 1800,
+        pins: ['+', '-'],
+        operatingVoltage: 14.8,
+        maxCurrent_mA: 0,
       },
       {
         id: 'c1',
@@ -431,7 +445,28 @@ void loop() {
         estimatedCost: 5,
         pins: ['1', '2'],
         operatingVoltage: 3.3
-      }
+      },
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `esc${index + 1}`,
+        name: `Brushless ESC ${index + 1} (PWM input)`,
+        description: 'Electronic speed controller; receives a low-voltage PWM command and battery power, then commutates its connected brushless motor.',
+        category: 'Actuator' as const,
+        package: 'ESC module',
+        estimatedCost: 500,
+        pins: ['SIGNAL', 'GND', 'VBAT', 'MOTOR_U', 'MOTOR_V', 'MOTOR_W'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 20,
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `motor${index + 1}`,
+        name: `Brushless motor ${index + 1}`,
+        description: 'Three-phase quadcopter motor powered by its matching ESC; never connect motor phases to MCU pins.',
+        category: 'Actuator' as const,
+        package: 'Brushless motor',
+        estimatedCost: 900,
+        pins: ['PHASE_U', 'PHASE_V', 'PHASE_W'],
+        operatingVoltage: 14.8,
+      }))
     ],
     pinMappings: [
       { mcuPin: '3V3', componentId: 's1', componentPin: 'VCC', protocol: 'Power', description: 'Clean 3.3V power to IMU sensor', wireColor: '#ef4444' },
@@ -443,7 +478,56 @@ void loop() {
       { mcuPin: 'PA4', componentId: 's1', componentPin: 'CS', protocol: 'SPI', description: 'SPI1 Chip Select (CS) - Active Low', wireColor: '#a855f7' },
       { mcuPin: 'PA5', componentId: 's1', componentPin: 'SCLK', protocol: 'SPI', description: 'SPI1 Serial Clock', wireColor: '#eab308' },
       { mcuPin: 'PA6', componentId: 's1', componentPin: 'MISO', protocol: 'SPI', description: 'SPI1 Master In Slave Out', wireColor: '#22c55e' },
-      { mcuPin: 'PA7', componentId: 's1', componentPin: 'MOSI', protocol: 'SPI', description: 'SPI1 Master Out Slave In', wireColor: '#3b82f6' }
+      { mcuPin: 'PA7', componentId: 's1', componentPin: 'MOSI', protocol: 'SPI', description: 'SPI1 Master Out Slave In', wireColor: '#3b82f6' },
+      { mcuPin: 'VBAT', sourceComponentId: 'battery1', sourceComponentPin: '+', componentId: 'p1', componentPin: 'VIN', protocol: 'Power', description: 'Flight battery positive to BEC input' },
+      { mcuPin: 'GND', sourceComponentId: 'battery1', sourceComponentPin: '-', componentId: 'p1', componentPin: 'GND', protocol: 'GND', description: 'Flight battery negative to common BEC ground' },
+      ...Array.from({ length: 4 }, (_, index) => ({
+        mcuPin: `PA${index}`,
+        componentId: `esc${index + 1}`,
+        componentPin: 'SIGNAL',
+        protocol: 'PWM' as const,
+        description: `TIM2_CH${index + 1} PWM command from STM32 to ESC ${index + 1} signal input`,
+        wireColor: '#c97737',
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        mcuPin: 'GND',
+        componentId: `esc${index + 1}`,
+        componentPin: 'GND',
+        protocol: 'GND' as const,
+        description: `Common signal ground for ESC ${index + 1}`,
+        wireColor: '#1e293b',
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        mcuPin: 'VBAT',
+        sourceComponentId: 'battery1',
+        sourceComponentPin: '+',
+        componentId: `esc${index + 1}`,
+        componentPin: 'VBAT',
+        protocol: 'Power' as const,
+        description: `Flight battery power bus to ESC ${index + 1}`,
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        mcuPin: 'GND',
+        sourceComponentId: 'battery1',
+        sourceComponentPin: '-',
+        componentId: `esc${index + 1}`,
+        componentPin: 'GND',
+        protocol: 'GND' as const,
+        description: `Common battery and PWM signal ground for ESC ${index + 1}`,
+      })),
+      ...Array.from({ length: 12 }, (_, index) => {
+        const escIndex = Math.floor(index / 3) + 1;
+        const phase = ['U', 'V', 'W'][index % 3];
+        return {
+          mcuPin: `MOTOR_${phase}`,
+          sourceComponentId: `esc${escIndex}`,
+          sourceComponentPin: `MOTOR_${phase}`,
+          componentId: `motor${escIndex}`,
+          componentPin: `PHASE_${phase}`,
+          protocol: 'Power' as const,
+          description: `ESC ${escIndex} phase ${phase} output to brushless motor ${escIndex}`,
+        };
+      }),
     ],
     labGuide: {
       voltageSupplyNote: 'Motors draw several amperes from LiPo battery. Never power motors directly from the STM32 3.3V or USB port; always route high current through the BEC and ESC power bus.',
@@ -451,6 +535,7 @@ void loop() {
         'STM32F401CCU6 BlackPill Development Board',
         'MPU6000 or MPU6500 SPI Breakout Board',
         '5V/3A BEC (Battery Elimination Circuit)',
+        'Four ESCs and four compatible brushless motors',
         'ST-Link V2 USB Programmer or USB-C Cable (DFU mode)',
         'Solderless breadboard & high-quality DuPont jumper wires'
       ],
@@ -470,13 +555,24 @@ void loop() {
           stepNumber: 3,
           title: 'Connect Sensor Power with Decoupling',
           instruction: 'Connect STM32 3V3 -> MPU6000 VCC. Connect STM32 GND -> MPU6000 GND. For optimal gyro noise reduction, place a 100nF ceramic capacitor across VCC and GND directly next to the sensor module.'
+        },
+        {
+          stepNumber: 4,
+          title: 'Connect ESC signal outputs',
+          instruction: 'Connect PA0/TIM2_CH1 to ESC1 SIGNAL, PA1/TIM2_CH2 to ESC2 SIGNAL, PA2/TIM2_CH3 to ESC3 SIGNAL, and PA3/TIM2_CH4 to ESC4 SIGNAL. Join ESC signal grounds to the STM32 ground.'
+        },
+        {
+          stepNumber: 5,
+          title: 'Connect battery, ESCs, and motors',
+          instruction: 'Connect the LiPo battery to the BEC input and ESC power inputs. Connect regulated 5V from the BEC to the BlackPill 5V input. Connect each ESC three-phase output only to its matching brushless motor.'
         }
       ],
       testingProcedure: [
+        'Remove all propellers before powering the flight controller.',
         'Flash the STM32 via ST-Link or USB DFU bootloader.',
         'Open Serial Monitor at 115200 baud.',
         'Check that the MPU6000 WHO_AM_I register returns 0x68 or 0x70.',
-        'Tilt the breadboard by 90 degrees and confirm acceleration on the Z-axis drops from 1.0G to 0.0G while X/Y axis rises to 1.0G.'
+        'Confirm all four PWM outputs remain at minimum throttle during startup.'
       ],
       troubleshootingTips: [
         'WHO_AM_I returns 0x00 or 0xFF: Loose wire on MISO or MOSI, or incorrect SPI mode (MPU6000 supports SPI Mode 0 or 3).',
@@ -487,19 +583,24 @@ void loop() {
 #include <SPI.h>
 
 #define PIN_CS PA4
+const uint8_t escPins[] = {PA0, PA1, PA2, PA3};
 
 void writeRegister(uint8_t reg, uint8_t val) {
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE3));
   digitalWrite(PIN_CS, LOW);
   SPI.transfer(reg & 0x7F); // Write flag
   SPI.transfer(val);
   digitalWrite(PIN_CS, HIGH);
+  SPI.endTransaction();
 }
 
 uint8_t readRegister(uint8_t reg) {
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE3));
   digitalWrite(PIN_CS, LOW);
   SPI.transfer(reg | 0x80); // Read flag
   uint8_t val = SPI.transfer(0x00);
   digitalWrite(PIN_CS, HIGH);
+  SPI.endTransaction();
   return val;
 }
 
@@ -516,21 +617,29 @@ void setup() {
   Serial.print("MPU WHO_AM_I: 0x");
   Serial.println(whoami, HEX);
 
-  // Wake up MPU (clear SLEEP bit in PWR_MGMT_1)
-  writeRegister(0x6B, 0x00);
+  // Reset and wake the MPU6000; verify WHO_AM_I over SPI.
+  writeRegister(0x6B, 0x80);
+  delay(100);
+  writeRegister(0x6B, 0x01);
+
+  analogWriteFrequency(400);
+  for (uint8_t pin : escPins) {
+    pinMode(pin, OUTPUT);
+    analogWrite(pin, 102); // Approximately 1000 us at 400 Hz with 8-bit PWM.
+  }
 }
 
 void loop() {
-  // Read gyro & accel registers at 1kHz loop
+  // Keep the ESC commands at minimum until calibrated flight-control firmware is installed.
   delay(10);
 }`,
-    warnings: ['MPU6000 requires very clean 3.3V power, add decoupling capacitors close to VCC pin']
+    warnings: []
   },
 
   'rpi-pico-synth': {
     id: 't-rpi-pico-synth',
-    title: 'RP2040 Polyphonic Audio Synthesizer',
-    description: 'Dual-core ARM Cortex-M0+ audio synth engine with digital I2S stereo DAC output and optocoupler MIDI input.',
+    title: 'RP2040 MIDI Synthesizer',
+    description: 'RP2040 monophonic MIDI synthesizer with an isolated 5-pin DIN MIDI input, UART MIDI parsing, and PCM5102A I2S audio output.',
     components: [
       {
         id: 'u1',
@@ -539,7 +648,7 @@ void loop() {
         category: 'MCU',
         package: 'DIP-40 Module',
         estimatedCost: 320.00,
-        pins: ['3V3', 'GND', 'GP0', 'GP1', 'GP26', 'GP27', 'GP28'],
+        pins: ['3V3', 'GND', 'GP0', 'GP1', 'GP5', 'GP26', 'GP27', 'GP28'],
         operatingVoltage: 3.3,
         maxCurrent_mA: 120,
         pinDescriptions: {
@@ -547,6 +656,7 @@ void loop() {
           'GND': 'Digital / Analog Ground',
           'GP0': 'I2S Bit Clock (BCLK) via PIO state machine',
           'GP1': 'I2S Serial Audio Data (DIN)',
+          'GP5': 'UART1 RX for optically isolated 31250 baud MIDI input',
           'GP26': 'ADC0 Analog Input (Rotary Potentiometer / Frequency)',
           'GP27': 'ADC1 Analog Input (Resonance / Filter cutoff)',
           'GP28': 'I2S Word Select / Left-Right Clock (LRCLK)'
@@ -569,22 +679,77 @@ void loop() {
           'DIN': 'Serial Digital Audio stream input',
           'LCK': 'Left/Right Word Select Clock (44.1kHz)'
         }
+      },
+      {
+        id: 'din1',
+        name: '5-pin DIN MIDI input connector',
+        description: 'Standard MIDI IN connector. Pins 4 and 5 feed the optoisolator input circuit.',
+        category: 'Connector',
+        package: '5-pin DIN jack',
+        estimatedCost: 80,
+        pins: ['4', '5', 'SHIELD'],
+        operatingVoltage: 5,
+        maxCurrent_mA: 0,
+      },
+      {
+        id: 'opto1',
+        name: '6N138 MIDI input optocoupler',
+        description: 'Optically isolates the MIDI current-loop input from the RP2040 UART. Confirm the selected device pinout.',
+        category: 'Sensor',
+        package: 'DIP-8 optocoupler',
+        estimatedCost: 45,
+        pins: ['ANODE', 'CATHODE', 'NC', 'GND', 'NC2', 'VO', 'BASE', 'VCC'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 2,
+      },
+      {
+        id: 'r_midi_in',
+        name: '220Ω MIDI input resistor',
+        description: 'Series current-limiting resistor between DIN pin 4 and optocoupler LED anode.',
+        category: 'Passive',
+        package: 'Axial resistor',
+        estimatedCost: 2,
+        pins: ['1', '2'],
+        operatingVoltage: 5,
+        maxCurrent_mA: 5,
+      },
+      {
+        id: 'r_midi_pullup',
+        name: '4.7kΩ MIDI UART pull-up resistor',
+        description: 'Pulls the optocoupler output up to 3.3V for the RP2040 UART RX input.',
+        category: 'Passive',
+        package: 'Axial resistor',
+        estimatedCost: 2,
+        pins: ['1', '2'],
+        operatingVoltage: 3.3,
+        maxCurrent_mA: 1,
       }
     ],
     pinMappings: [
-      { mcuPin: '3V3', componentId: 'u2', componentPin: 'VIN', protocol: 'Power', description: '3.3V Power to DAC Module', wireColor: '#ef4444' },
-      { mcuPin: 'GND', componentId: 'u2', componentPin: 'GND', protocol: 'GND', description: 'Common Ground', wireColor: '#1e293b' },
+      { mcuPin: '3V3', componentId: 'u2', componentPin: 'VIN', protocol: 'Power', description: '3.3V supply to PCM5102A', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'u2', componentPin: 'GND', protocol: 'GND', description: 'Common audio and digital ground', wireColor: '#1e293b' },
       { mcuPin: 'GP0', componentId: 'u2', componentPin: 'BCK', protocol: 'I2S', description: 'I2S Continuous Bit Clock (BCLK)', wireColor: '#eab308' },
       { mcuPin: 'GP1', componentId: 'u2', componentPin: 'DIN', protocol: 'I2S', description: 'I2S Audio Data Stream (DIN)', wireColor: '#3b82f6' },
-      { mcuPin: 'GP28', componentId: 'u2', componentPin: 'LCK', protocol: 'I2S', description: 'I2S Left/Right Clock (LRCLK)', wireColor: '#22c55e' }
+      { mcuPin: 'GP28', componentId: 'u2', componentPin: 'LCK', protocol: 'I2S', description: 'I2S word-select / left-right clock', wireColor: '#22c55e' },
+      { mcuPin: '3V3', componentId: 'opto1', componentPin: 'VCC', protocol: 'Power', description: '3.3V optocoupler output-side supply', wireColor: '#ef4444' },
+      { mcuPin: 'GND', componentId: 'opto1', componentPin: 'GND', protocol: 'GND', description: 'Isolated UART-side ground', wireColor: '#1e293b' },
+      { mcuPin: 'GND', componentId: 'opto1', componentPin: 'BASE', protocol: 'GND', description: 'Reference the 6N138 base to output-side ground', wireColor: '#1e293b' },
+      { mcuPin: 'MIDI_IN', sourceComponentId: 'din1', sourceComponentPin: '4', componentId: 'r_midi_in', componentPin: '1', protocol: 'UART', description: 'MIDI DIN pin 4 to input current-limiting resistor' },
+      { mcuPin: 'DIN4_R', sourceComponentId: 'r_midi_in', sourceComponentPin: '2', componentId: 'opto1', componentPin: 'ANODE', protocol: 'UART', description: 'Series resistor to 6N138 input LED anode' },
+      { mcuPin: 'MIDI_RETURN', sourceComponentId: 'din1', sourceComponentPin: '5', componentId: 'opto1', componentPin: 'CATHODE', protocol: 'UART', description: 'MIDI DIN pin 5 to 6N138 input LED cathode' },
+      { mcuPin: 'GP5', sourceComponentId: 'opto1', sourceComponentPin: 'VO', componentId: 'u1', componentPin: 'GP5', protocol: 'UART', description: 'Optically isolated MIDI data output to RP2040 UART1 RX at 31250 baud' },
+      { mcuPin: '3V3', componentId: 'r_midi_pullup', componentPin: '1', protocol: 'Power', description: 'UART output pull-up to 3.3V' },
+      { mcuPin: 'GP5', sourceComponentId: 'opto1', sourceComponentPin: 'VO', componentId: 'r_midi_pullup', componentPin: '2', protocol: 'UART', description: 'UART RX output pull-up branch' }
     ],
     labGuide: {
-      voltageSupplyNote: 'Audio output is sensitive to ground loops. Keep the analog audio jack cable isolated from dirty power lines like stepper motors or switching converters.',
+      voltageSupplyNote: 'The DIN MIDI input is galvanically isolated by the optocoupler. The PCM5102A provides line-level audio, not speaker power; use powered speakers or an external amplifier.',
       prerequisites: [
         'Raspberry Pi Pico (headers pre-soldered)',
         'PCM5102A I2S 3.5mm DAC breakout board',
-        'Standard 3.5mm headphones or powered desktop speakers',
-        'Breadboard and 5x jumper wires',
+        '5-pin DIN MIDI input jack',
+        '6N138 optocoupler and 220Ω / 4.7kΩ resistors',
+        'Powered speakers or audio amplifier',
+        'Breadboard and jumper wires',
         'Arduino IDE with "Raspberry Pi Pico/RP2040 by Earle Philhower" core'
       ],
       breadboardWiringSteps: [
@@ -605,58 +770,92 @@ void loop() {
         },
         {
           stepNumber: 4,
-          title: 'Power and Ground',
-          instruction: 'Connect Pico Pin 36 (3V3(OUT)) -> PCM5102A VIN. Connect Pico Pin 38 (GND) -> PCM5102A GND.'
+          title: 'Wire the MIDI input isolator',
+          instruction: 'Connect DIN pin 4 through the 220Ω resistor to 6N138 ANODE. Connect DIN pin 5 to 6N138 CATHODE. Power the output side from Pico 3V3/GND and pull VO up to 3V3 with 4.7kΩ.'
+        },
+        {
+          stepNumber: 5,
+          title: 'Connect MIDI data to the Pico',
+          instruction: 'Connect 6N138 VO to Pico GP5 (UART1 RX). Connect the optocoupler output ground to Pico GND. MIDI serial is 31250 baud, 8-N-1.'
+        },
+        {
+          stepNumber: 6,
+          title: 'Connect audio output',
+          instruction: 'Connect Pico GP0 -> PCM5102A BCK, GP1 -> DIN, GP28 -> LCK, 3V3 -> VIN, and GND -> GND. Connect the DAC line output to powered speakers or an amplifier.'
         }
       ],
       testingProcedure: [
-        'Plug in 3.5mm headphones to the DAC jack.',
-        'Upload the firmware sketch.',
-        'You should immediately hear a clear 440Hz (A4) test sine tone.',
-        'Turn on the Serial Monitor to verify sampling rate is locked at 44.1kHz.'
+        'Connect the DAC line output to powered audio equipment at low volume.',
+        'Upload the firmware and open Serial Monitor at 115200 baud.',
+        'Send MIDI note-on and note-off messages; verify the reported note and audible tone.'
       ],
       troubleshootingTips: [
-        'Loud buzzing or hiss: DAC requires stable 3.3V; plug the Pico directly into a PC USB port rather than an unpowered USB hub.',
-        'No sound: Check that the XSMT (soft mute) pin on the DAC module is pulled high or bridged properly on the PCB.'
+        'No MIDI messages: verify the DIN pin 4/5 orientation, optocoupler LED polarity, 4.7kΩ pull-up, and 31250 baud.',
+        'No audio: verify I2S wiring and that a powered amplifier or speakers are connected to the DAC line output.'
       ]
     },
     firmwareCode: `#include <Arduino.h>
+#include <math.h>
 #include <I2S.h>
 
 I2S i2s(OUTPUT);
-
+constexpr int midiRxPin = 5;
 const int sampleRate = 44100;
-const float frequency = 440.0; // 440Hz Concert A tone
-int phase = 0;
+volatile float noteFrequency = 0.0f;
+uint32_t phase = 0;
+uint8_t runningStatus = 0;
+uint8_t dataBytes[2] = {0, 0};
+uint8_t dataCount = 0;
+
+void handleMidiByte(uint8_t value) {
+  if (value >= 0xF8) return;
+  if (value & 0x80) {
+    if (value >= 0xF0) { runningStatus = 0; dataCount = 0; return; }
+    runningStatus = value;
+    dataCount = 0;
+    return;
+  }
+  if (!runningStatus) return;
+  dataBytes[dataCount++] = value;
+  if (dataCount < 2) return;
+  dataCount = 0;
+  const uint8_t command = runningStatus & 0xF0;
+  const uint8_t note = dataBytes[0];
+  const uint8_t velocity = dataBytes[1];
+  if (command == 0x90 && velocity > 0) {
+    noteFrequency = 440.0f * powf(2.0f, (static_cast<int>(note) - 69) / 12.0f);
+  } else if (command == 0x80 || (command == 0x90 && velocity == 0)) {
+    noteFrequency = 0.0f;
+  }
+}
 
 void setup() {
   Serial.begin(115200);
-  
-  // Set I2S pins: BCLK=0, LRCLK=28, DOUT=1
+  Serial1.setRX(midiRxPin);
+  Serial1.begin(31250);
   i2s.setBCLK(0);
   i2s.setDATA(1);
   i2s.setBitsPerSample(16);
-  
   if (!i2s.begin(sampleRate)) {
-    Serial.println("Failed to initialize I2S!");
-    while (1);
+    Serial.println("I2S initialization failed");
+    while (true) delay(1000);
   }
-  Serial.println("I2S Synthesizer Ready (440Hz Tone)");
+  Serial.println("MIDI synthesizer ready");
 }
 
 void loop() {
-  // Generate 16-bit sine wave
-  float sample = sin((phase * 2.0 * PI * frequency) / sampleRate);
-  int16_t sample16 = (int16_t)(sample * 16000.0);
-  
-  // Write stereo samples
+  while (Serial1.available()) handleMidiByte(static_cast<uint8_t>(Serial1.read()));
+  const float frequency = noteFrequency;
+  const int16_t sample16 = frequency > 0.0f
+      ? static_cast<int16_t>(sinf((static_cast<float>(phase) / 4294967296.0f) * 2.0f * PI) * 12000.0f)
+      : 0;
   i2s.write(sample16);
   i2s.write(sample16);
-  
-  phase++;
-  if (phase >= sampleRate) phase = 0;
+  if (frequency > 0.0f) {
+    phase += static_cast<uint32_t>(frequency * 4294967296.0f / sampleRate);
+  }
 }`,
-    warnings: ['Use a clean 3.3V or 5V rail to prevent audio popping and noise.']
+    warnings: []
   }
 };
 

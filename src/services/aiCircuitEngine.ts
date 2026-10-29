@@ -427,9 +427,10 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
   }
 
   let baseTemplate = templates['esp32-weather'];
-  if (/\b(?:stm32|drone|flight controller)\b/i.test(prompt)) {
+  const asksForFlightController = /\b(?:drone|flight controller|quadcopter|quadrotor|esc|brushless motor)\b|(?:motor.{0,20}pwm|pwm.{0,20}motor)/i.test(prompt);
+  if (asksForFlightController && /\b(?:stm32|mpu\s*6000|flight controller|drone|quadcopter|quadrotor)\b/i.test(prompt)) {
     baseTemplate = templates['stm32-drone'];
-  } else if (/\b(?:pico|rp2040|synth|audio|i2s|dac)\b/i.test(prompt)) {
+  } else if (/\b(?:pico|rp2040|synth|audio|i2s|dac|midi)\b/i.test(prompt)) {
     baseTemplate = templates['rpi-pico-synth'];
   } else if (/\b(?:bme280|weather|oled|ssd1306|environmental)\b/i.test(prompt) || /\btemperature\b/i.test(prompt) && /\b(?:humidity|pressure)\b/i.test(prompt)) {
     baseTemplate = templates['esp32-weather'];

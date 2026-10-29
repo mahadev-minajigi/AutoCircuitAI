@@ -353,68 +353,245 @@ void loop() {
         "warnings": ["Ensure BME280 I2C address is configured to 0x76."]
     },
     "stm32-drone": {
-        "id": "stm32-drone-v1",
+        "id": "stm32-mpu6000-flight-v2",
         "title": "STM32 Quadcopter Flight Controller",
-        "description": "High-performance STM32F401 based flight controller with MPU6050 6-DOF IMU and 4x PWM outputs for ESC control.",
+        "description": "STM32F401 flight-controller hardware with an MPU6000 connected over SPI and four timer PWM outputs connected to brushless-motor ESC signal inputs.",
         "components": [
-            {"id": "mcu1", "name": "STM32F401CCU6", "description": "ARM Cortex-M4 84MHz Microcontroller (BlackPill)", "category": "MCU", "package": "UFQFPN-48", "estimatedCost": 280.00, "pins": ["3V3", "GND", "PB6", "PB7", "PA0", "PA1", "PA2", "PA3"], "operatingVoltage": 3.3, "maxCurrent_mA": 100},
-            {"id": "s1", "name": "MPU6050", "description": "6-Axis Gyroscope & Accelerometer Module", "category": "Sensor", "package": "QFN-24", "estimatedCost": 150.00, "pins": ["VCC", "GND", "SDA", "SCL", "INT"], "operatingVoltage": 3.3, "maxCurrent_mA": 4},
-            {"id": "p1", "name": "Mini 5V/3A BEC", "description": "Step-down Switching Voltage Regulator", "category": "Power", "package": "Module", "estimatedCost": 120.00, "pins": ["VIN", "VOUT", "GND"], "operatingVoltage": 5.0, "maxCurrent_mA": 3000}
+            {"id": "mcu1", "name": "STM32F401CCU6 BlackPill", "description": "3.3V ARM Cortex-M4 flight-controller MCU. PA0-PA3 provide TIM2_CH1-CH4 PWM outputs.", "category": "MCU", "package": "Development board", "estimatedCost": 320.00, "pins": ["5V", "3V3", "GND", "PA0", "PA1", "PA2", "PA3", "PA4", "PA5", "PA6", "PA7"], "operatingVoltage": 3.3, "maxCurrent_mA": 100},
+            {"id": "imu1", "name": "MPU6000 6-axis IMU module", "description": "Gyroscope and accelerometer module wired using SPI; use a 3.3V-compatible breakout.", "category": "Sensor", "package": "SPI breakout", "estimatedCost": 520.00, "pins": ["VCC", "GND", "CS", "SCLK", "MISO", "MOSI", "INT"], "operatingVoltage": 3.3, "maxCurrent_mA": 4},
+            {"id": "battery1", "name": "3S-4S LiPo battery input", "description": "Flight battery supply for the BEC and four ESC power inputs; battery voltage depends on the selected cell count.", "category": "Power", "package": "Battery connector", "estimatedCost": 1800.00, "pins": ["+", "-"], "operatingVoltage": 14.8, "maxCurrent_mA": 0},
+            {"id": "bec1", "name": "5V flight BEC", "description": "Regulated 5V supply for the BlackPill board. Size the BEC for the board and peripherals; it does not supply motor current.", "category": "Power", "package": "Switching regulator module", "estimatedCost": 250.00, "pins": ["VIN", "VOUT", "GND"], "operatingVoltage": 5.0},
+            {"id": "c1", "name": "100nF IMU bypass capacitor", "description": "Place close to the MPU6000 module across VCC and GND.", "category": "Passive", "package": "Ceramic capacitor", "estimatedCost": 5.00, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 0},
+            *[
+                {"id": f"esc{i}", "name": f"Brushless ESC {i} (PWM input)", "description": "Electronic speed controller; receives a low-voltage PWM command and battery power, then commutates its connected brushless motor.", "category": "Actuator", "package": "ESC module", "estimatedCost": 500.00, "pins": ["SIGNAL", "GND", "VBAT", "MOTOR_U", "MOTOR_V", "MOTOR_W"], "operatingVoltage": 3.3, "maxCurrent_mA": 20}
+                for i in range(1, 5)
+            ],
+            *[
+                {"id": f"motor{i}", "name": f"Brushless motor {i}", "description": "Three-phase quadcopter motor powered by its matching ESC; never connect motor phases to MCU pins.", "category": "Actuator", "package": "Brushless motor", "estimatedCost": 900.00, "pins": ["PHASE_U", "PHASE_V", "PHASE_W"], "operatingVoltage": 14.8}
+                for i in range(1, 5)
+            ]
         ],
         "pinMappings": [
-            {"mcuPin": "5V", "componentId": "p1", "componentPin": "VIN", "protocol": "Power", "description": "USB 5V input to AMS1117"},
-            {"mcuPin": "GND", "componentId": "p1", "componentPin": "GND", "protocol": "GND", "description": "Common system ground"},
-            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "s1", "componentPin": "VCC", "protocol": "Power", "description": "Regulated 3.3V to BME280"},
-            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "d1", "componentPin": "VCC", "protocol": "Power", "description": "Regulated 3.3V to OLED"},
-            {"mcuPin": "GPIO21", "componentId": "s1", "componentPin": "SDA", "protocol": "I2C", "description": "I2C data"},
-            {"mcuPin": "GPIO22", "componentId": "s1", "componentPin": "SCL", "protocol": "I2C", "description": "I2C clock"},
-            {"mcuPin": "GPIO21", "componentId": "d1", "componentPin": "SDA", "protocol": "I2C", "description": "Shared I2C data"},
-            {"mcuPin": "GPIO22", "componentId": "d1", "componentPin": "SCL", "protocol": "I2C", "description": "Shared I2C clock"},
-            {"mcuPin": "GPIO21", "componentId": "r1", "componentPin": "2", "protocol": "I2C", "description": "SDA 4.7k pull-up branch"},
-            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "r1", "componentPin": "1", "protocol": "Power", "description": "SDA pull-up to 3.3V"},
-            {"mcuPin": "GPIO22", "componentId": "r2", "componentPin": "2", "protocol": "I2C", "description": "SCL 4.7k pull-up branch"},
-            {"mcuPin": "VOUT", "sourceComponentId": "p1", "componentId": "r2", "componentPin": "1", "protocol": "Power", "description": "SCL pull-up to 3.3V"}
+            {"mcuPin": "PA4", "componentId": "imu1", "componentPin": "CS", "protocol": "SPI", "description": "SPI1 chip select for MPU6000 (active low)"},
+            {"mcuPin": "PA5", "componentId": "imu1", "componentPin": "SCLK", "protocol": "SPI", "description": "SPI1 clock from STM32 to MPU6000"},
+            {"mcuPin": "PA6", "componentId": "imu1", "componentPin": "MISO", "protocol": "SPI", "description": "SPI1 MISO from MPU6000 to STM32"},
+            {"mcuPin": "PA7", "componentId": "imu1", "componentPin": "MOSI", "protocol": "SPI", "description": "SPI1 MOSI from STM32 to MPU6000"},
+            {"mcuPin": "3V3", "componentId": "imu1", "componentPin": "VCC", "protocol": "Power", "description": "3.3V logic supply to MPU6000"},
+            {"mcuPin": "GND", "componentId": "imu1", "componentPin": "GND", "protocol": "GND", "description": "Common logic ground to MPU6000"},
+            {"mcuPin": "3V3", "componentId": "c1", "componentPin": "1", "protocol": "Power", "description": "IMU supply-side bypass capacitor"},
+            {"mcuPin": "GND", "componentId": "c1", "componentPin": "2", "protocol": "GND", "description": "IMU ground-side bypass capacitor"},
+            {"mcuPin": "VBAT", "sourceComponentId": "battery1", "sourceComponentPin": "+", "componentId": "bec1", "componentPin": "VIN", "protocol": "Power", "description": "Battery positive to regulated 5V BEC input"},
+            {"mcuPin": "GND", "sourceComponentId": "battery1", "sourceComponentPin": "-", "componentId": "bec1", "componentPin": "GND", "protocol": "GND", "description": "Battery negative to BEC ground"},
+            {"mcuPin": "5V", "sourceComponentId": "bec1", "sourceComponentPin": "VOUT", "componentId": "mcu1", "componentPin": "5V", "protocol": "Power", "description": "Regulated BEC 5V output to BlackPill 5V input"},
+            {"mcuPin": "GND", "sourceComponentId": "bec1", "sourceComponentPin": "GND", "componentId": "mcu1", "componentPin": "GND", "protocol": "GND", "description": "BEC, MCU, IMU, and ESC signal grounds are common"},
+            *[
+                {"mcuPin": f"PA{i-1}", "componentId": f"esc{i}", "componentPin": "SIGNAL", "protocol": "PWM", "description": f"TIM2_CH{i} PWM command from STM32 to ESC {i} signal input"}
+                for i in range(1, 5)
+            ],
+            *[
+                {"mcuPin": "VBAT", "sourceComponentId": "battery1", "sourceComponentPin": "+", "componentId": f"esc{i}", "componentPin": "VBAT", "protocol": "Power", "description": f"Flight battery positive to ESC {i} power input"}
+                for i in range(1, 5)
+            ],
+            *[
+                {"mcuPin": "GND", "sourceComponentId": "battery1", "sourceComponentPin": "-", "componentId": f"esc{i}", "componentPin": "GND", "protocol": "GND", "description": f"Common battery and PWM signal ground for ESC {i}"}
+                for i in range(1, 5)
+            ],
+            *[
+                {"mcuPin": f"MOTOR_{phase}", "sourceComponentId": f"esc{i}", "sourceComponentPin": f"MOTOR_{phase}", "componentId": f"motor{i}", "componentPin": f"PHASE_{phase}", "protocol": "Power", "description": f"ESC {i} three-phase output {phase} to brushless motor {i}"}
+                for i in range(1, 5) for phase in ("U", "V", "W")
+            ]
         ],
-        "firmwareCode": """#include <Wire.h>
+        "labGuide": {
+            "voltageSupplyNote": "Use a 3S-4S LiPo only with a BEC and ESCs rated for that battery voltage. Remove all propellers during bench testing. ESCs drive the motors; the STM32 only drives their low-voltage signal inputs.",
+            "prerequisites": [
+                "STM32F401CCU6 BlackPill board",
+                "MPU6000 SPI breakout with 3.3V-compatible logic",
+                "3S-4S LiPo battery and appropriately rated BEC",
+                "Four ESCs and four compatible brushless motors",
+                "ST-Link or supported USB DFU programmer"
+            ],
+            "breadboardWiringSteps": [
+                {"stepNumber": 1, "title": "Connect the MPU6000 SPI bus", "instruction": "Connect PA4 to CS, PA5 to SCLK, PA6 to MISO, PA7 to MOSI, 3V3 to VCC, and GND to GND. Place the 100nF bypass capacitor directly across the IMU supply pins."},
+                {"stepNumber": 2, "title": "Power the controller", "instruction": "Connect LiPo positive and negative to the BEC input. Connect the BEC regulated 5V output to the BlackPill 5V input and join BEC, MCU, IMU, and ESC signal grounds."},
+                {"stepNumber": 3, "title": "Connect four ESC signal inputs", "instruction": "Connect PA0/TIM2_CH1 to ESC1 SIGNAL, PA1/TIM2_CH2 to ESC2 SIGNAL, PA2/TIM2_CH3 to ESC3 SIGNAL, and PA3/TIM2_CH4 to ESC4 SIGNAL. Connect each ESC ground to common ground."},
+                {"stepNumber": 4, "title": "Connect ESC power and motors", "instruction": "Connect the battery power bus to each ESC battery input. Connect each ESC's three motor phase outputs only to its matching brushless motor phases. Do not route motor current through the breadboard or MCU."}
+            ],
+            "testingProcedure": [
+                "Remove all propellers before powering the flight controller.",
+                "Flash the STM32 sketch and confirm the MPU6000 WHO_AM_I response is 0x68 or 0x70.",
+                "Confirm the four PWM outputs remain at minimum throttle during startup.",
+                "Test each ESC and motor individually with a current-limited, secured setup before flight."
+            ],
+            "troubleshootingTips": [
+                "No IMU response: check 3.3V, common ground, CS polarity, and SPI wiring.",
+                "ESC does not arm: verify signal ground, battery input, supported PWM rate, and the ESC manufacturer's arming procedure."
+            ]
+        },
+        "firmwareCode": """#include <Arduino.h>
+#include <SPI.h>
+
+constexpr uint8_t imuCs = PA4;
+constexpr uint8_t escPins[] = {PA0, PA1, PA2, PA3};
+constexpr uint8_t imuWhoAmI = 0x75;
+
+uint8_t readImuRegister(uint8_t address) {
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE3));
+  digitalWrite(imuCs, LOW);
+  SPI.transfer(address | 0x80);
+  const uint8_t value = SPI.transfer(0x00);
+  digitalWrite(imuCs, HIGH);
+  SPI.endTransaction();
+  return value;
+}
+
+void writeImuRegister(uint8_t address, uint8_t value) {
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE3));
+  digitalWrite(imuCs, LOW);
+  SPI.transfer(address & 0x7F);
+  SPI.transfer(value);
+  digitalWrite(imuCs, HIGH);
+  SPI.endTransaction();
+}
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin();
-  // Initialize MPU6050 & Timer PWM for ESCs
+  pinMode(imuCs, OUTPUT);
+  digitalWrite(imuCs, HIGH);
+  SPI.begin();
+  delay(100);
+  writeImuRegister(0x6B, 0x80);
+  delay(100);
+  writeImuRegister(0x6B, 0x01);
+  Serial.print("MPU6000 WHO_AM_I: 0x");
+  Serial.println(readImuRegister(imuWhoAmI), HEX);
+
+  analogWriteFrequency(400);
+  for (uint8_t pin : escPins) {
+    pinMode(pin, OUTPUT);
+    analogWrite(pin, 102); // Approximately 1000 us at 400 Hz with 8-bit PWM.
+  }
 }
 
 void loop() {
-  // Flight loop logic
+  // Keep the ESC commands at minimum until calibrated flight-control firmware is installed.
   delay(10);
 }""",
-        "warnings": ["Ensure 5V BEC regulator is used if powering motors from battery."]
+        "warnings": []
     },
     "rpi-pico-synth": {
-        "id": "rpi-pico-synth-v1",
-        "title": "RP2040 Polyphonic Audio Synthesizer",
-        "description": "Dual-core ARM Cortex-M0+ audio synth engine using I2S DAC output and rotary controls.",
+        "id": "rpi-pico-midi-synth-v2",
+        "title": "RP2040 MIDI Synthesizer",
+        "description": "RP2040 monophonic MIDI synthesizer with an isolated 5-pin DIN MIDI input, UART MIDI parsing, and PCM5102A I2S audio output.",
         "components": [
-            {"id": "mcu1", "name": "Raspberry Pi Pico (RP2040)", "description": "Dual Cortex-M0+ 133MHz Microcontroller", "category": "MCU", "package": "QFN-56", "estimatedCost": 320.00, "pins": ["3V3", "GND", "GP26", "GP27", "GP28", "GP9", "GP10", "GP11"], "operatingVoltage": 3.3, "maxCurrent_mA": 120},
-            {"id": "a1", "name": "MAX98357A", "description": "I2S 3.2W Class-D Mono Amplifier", "category": "Actuator", "package": "WLP-9", "estimatedCost": 190.00, "pins": ["VIN", "GND", "BCLK", "LRC", "DIN"], "operatingVoltage": 3.3, "maxCurrent_mA": 500}
+            {"id": "mcu1", "name": "Raspberry Pi Pico (RP2040)", "description": "3.3V dual-core Cortex-M0+ development board. GP5 is UART1 RX for MIDI input; GP0/GP1/GP28 connect to the I2S DAC.", "category": "MCU", "package": "DIP-40 development board", "estimatedCost": 320.00, "pins": ["3V3", "GND", "GP0", "GP1", "GP5", "GP26", "GP27", "GP28"], "operatingVoltage": 3.3, "maxCurrent_mA": 120},
+            {"id": "dac1", "name": "PCM5102A I2S DAC Module", "description": "Stereo line-level I2S digital-to-analog converter; connect to a powered amplifier or line input.", "category": "Actuator", "package": "DAC breakout with line output", "estimatedCost": 350.00, "pins": ["VIN", "GND", "BCK", "DIN", "LCK"], "operatingVoltage": 3.3, "maxCurrent_mA": 50},
+            {"id": "din1", "name": "5-pin DIN MIDI input connector", "description": "Standard MIDI IN connector. Pins 4 and 5 feed the optoisolator input circuit.", "category": "Connector", "package": "5-pin DIN jack", "estimatedCost": 80.00, "pins": ["4", "5", "SHIELD"], "operatingVoltage": 5.0, "maxCurrent_mA": 0},
+            {"id": "opto1", "name": "6N138 MIDI input optocoupler", "description": "Optically isolates the MIDI current-loop input from the RP2040 UART. Confirm the selected device pinout.", "category": "Sensor", "package": "DIP-8 optocoupler", "estimatedCost": 45.00, "pins": ["ANODE", "CATHODE", "NC", "GND", "NC2", "VO", "BASE", "VCC"], "operatingVoltage": 3.3, "maxCurrent_mA": 2},
+            {"id": "r_midi_in", "name": "220Ω MIDI input resistor", "description": "Series current-limiting resistor between DIN pin 4 and optocoupler LED anode.", "category": "Passive", "package": "Axial resistor", "estimatedCost": 2.00, "pins": ["1", "2"], "operatingVoltage": 5.0, "maxCurrent_mA": 5},
+            {"id": "r_midi_pullup", "name": "4.7kΩ MIDI UART pull-up resistor", "description": "Pulls the optocoupler output up to 3.3V for the RP2040 UART RX input.", "category": "Passive", "package": "Axial resistor", "estimatedCost": 2.00, "pins": ["1", "2"], "operatingVoltage": 3.3, "maxCurrent_mA": 1}
         ],
         "pinMappings": [
-            {"mcuPin": "3V3", "componentId": "a1", "componentPin": "VIN", "protocol": "Power", "description": "Power input"},
-            {"mcuPin": "GND", "componentId": "a1", "componentPin": "GND", "protocol": "GND", "description": "Ground"},
-            {"mcuPin": "GP9", "componentId": "a1", "componentPin": "BCLK", "protocol": "I2S", "description": "Bit Clock"},
-            {"mcuPin": "GP10", "componentId": "a1", "componentPin": "LRC", "protocol": "I2S", "description": "Word Select"},
-            {"mcuPin": "GP11", "componentId": "a1", "componentPin": "DIN", "protocol": "I2S", "description": "Audio Data"}
+            {"mcuPin": "3V3", "componentId": "dac1", "componentPin": "VIN", "protocol": "Power", "description": "3.3V supply to PCM5102A"},
+            {"mcuPin": "GND", "componentId": "dac1", "componentPin": "GND", "protocol": "GND", "description": "Common audio and digital ground"},
+            {"mcuPin": "GP0", "componentId": "dac1", "componentPin": "BCK", "protocol": "I2S", "description": "I2S bit clock"},
+            {"mcuPin": "GP1", "componentId": "dac1", "componentPin": "DIN", "protocol": "I2S", "description": "I2S serial audio data"},
+            {"mcuPin": "GP28", "componentId": "dac1", "componentPin": "LCK", "protocol": "I2S", "description": "I2S word-select / left-right clock"},
+            {"mcuPin": "3V3", "componentId": "opto1", "componentPin": "VCC", "protocol": "Power", "description": "3.3V optocoupler output-side supply"},
+            {"mcuPin": "GND", "componentId": "opto1", "componentPin": "GND", "protocol": "GND", "description": "Isolated UART-side ground"},
+            {"mcuPin": "GND", "componentId": "opto1", "componentPin": "BASE", "protocol": "GND", "description": "Reference the 6N138 base to output-side ground"},
+            {"mcuPin": "MIDI_IN", "sourceComponentId": "din1", "sourceComponentPin": "4", "componentId": "r_midi_in", "componentPin": "1", "protocol": "UART", "description": "MIDI DIN pin 4 to input current-limiting resistor"},
+            {"mcuPin": "DIN4_R", "sourceComponentId": "r_midi_in", "sourceComponentPin": "2", "componentId": "opto1", "componentPin": "ANODE", "protocol": "UART", "description": "Series resistor to 6N138 input LED anode"},
+            {"mcuPin": "MIDI_RETURN", "sourceComponentId": "din1", "sourceComponentPin": "5", "componentId": "opto1", "componentPin": "CATHODE", "protocol": "UART", "description": "MIDI DIN pin 5 to 6N138 input LED cathode"},
+            {"mcuPin": "GP5", "sourceComponentId": "opto1", "sourceComponentPin": "VO", "componentId": "mcu1", "componentPin": "GP5", "protocol": "UART", "description": "Optically isolated MIDI data output to RP2040 UART1 RX at 31250 baud"},
+            {"mcuPin": "3V3", "componentId": "r_midi_pullup", "componentPin": "1", "protocol": "Power", "description": "UART output pull-up to 3.3V"},
+            {"mcuPin": "GP5", "sourceComponentId": "opto1", "sourceComponentPin": "VO", "componentId": "r_midi_pullup", "componentPin": "2", "protocol": "UART", "description": "UART RX output pull-up branch"}
         ],
+        "labGuide": {
+            "voltageSupplyNote": "The DIN MIDI input is galvanically isolated by the optocoupler. The PCM5102A provides line-level audio, not speaker power; use powered speakers or an external amplifier.",
+            "prerequisites": [
+                "Raspberry Pi Pico / RP2040 board",
+                "PCM5102A I2S DAC breakout",
+                "5-pin DIN MIDI input jack",
+                "6N138 optocoupler and 220Ω / 4.7kΩ resistors",
+                "Powered speakers or audio amplifier"
+            ],
+            "breadboardWiringSteps": [
+                {"stepNumber": 1, "title": "Wire the MIDI input isolator", "instruction": "Connect DIN pin 4 through the 220Ω resistor to 6N138 ANODE. Connect DIN pin 5 to 6N138 CATHODE. Power the output side from Pico 3V3/GND and pull VO up to 3V3 with 4.7kΩ."},
+                {"stepNumber": 2, "title": "Connect MIDI data to the Pico", "instruction": "Connect 6N138 VO to Pico GP5 (UART1 RX). Connect the optocoupler output ground to Pico GND. MIDI serial is 31250 baud, 8-N-1."},
+                {"stepNumber": 3, "title": "Connect the I2S DAC", "instruction": "Connect GP0 to PCM5102A BCK, GP1 to DIN, GP28 to LCK, 3V3 to VIN, and GND to GND. Connect the DAC line output to powered speakers or an amplifier."}
+            ],
+            "testingProcedure": [
+                "Connect the DAC line output to powered audio equipment at low volume.",
+                "Upload the firmware and open Serial Monitor at 115200 baud.",
+                "Send MIDI note-on and note-off messages; verify the reported note and audible tone."
+            ],
+            "troubleshootingTips": [
+                "No MIDI messages: verify the DIN pin 4/5 orientation, optocoupler LED polarity, 4.7kΩ pull-up, and 31250 baud.",
+                "No audio: verify I2S wiring and that a powered amplifier or speakers are connected to the DAC line output."
+            ]
+        },
         "firmwareCode": """#include <Arduino.h>
+#include <math.h>
+#include <I2S.h>
+
+I2S i2s(OUTPUT);
+constexpr int midiRxPin = 5;
+constexpr int sampleRate = 44100;
+volatile float noteFrequency = 0.0f;
+uint32_t phase = 0;
+uint8_t runningStatus = 0;
+uint8_t dataBytes[2] = {0, 0};
+uint8_t dataCount = 0;
+
+void handleMidiByte(uint8_t value) {
+  if (value >= 0xF8) return;
+  if (value & 0x80) {
+    if (value >= 0xF0) { runningStatus = 0; dataCount = 0; return; }
+    runningStatus = value;
+    dataCount = 0;
+    return;
+  }
+  if (!runningStatus) return;
+  dataBytes[dataCount++] = value;
+  if (dataCount < 2) return;
+  dataCount = 0;
+  const uint8_t command = runningStatus & 0xF0;
+  const uint8_t note = dataBytes[0];
+  const uint8_t velocity = dataBytes[1];
+  if (command == 0x90 && velocity > 0) {
+    noteFrequency = 440.0f * powf(2.0f, (static_cast<int>(note) - 69) / 12.0f);
+  } else if (command == 0x80 || (command == 0x90 && velocity == 0)) {
+    noteFrequency = 0.0f;
+  }
+}
 
 void setup() {
   Serial.begin(115200);
-  // Configure I2S interface on GP9, GP10, GP11
+  Serial1.setRX(midiRxPin);
+  Serial1.begin(31250);
+  i2s.setBCLK(0);
+  i2s.setDATA(1);
+  i2s.setBitsPerSample(16);
+  if (!i2s.begin(sampleRate)) {
+    Serial.println("I2S initialization failed");
+    while (true) delay(1000);
+  }
+  Serial.println("MIDI synthesizer ready");
 }
 
 void loop() {
-  // Waveform synthesis
+  while (Serial1.available()) handleMidiByte(static_cast<uint8_t>(Serial1.read()));
+  const float frequency = noteFrequency;
+  const int16_t sample = frequency > 0.0f
+      ? static_cast<int16_t>(sinf((static_cast<float>(phase) / 4294967296.0f) * 2.0f * PI) * 12000.0f)
+      : 0;
+  i2s.write(sample);
+  i2s.write(sample);
+  if (frequency > 0.0f) {
+    phase += static_cast<uint32_t>(frequency * 4294967296.0f / sampleRate);
+  }
 }""",
-        "warnings": ["Use a clean 3.3V or 5V rail to prevent audio popping and noise."]
+        "warnings": []
     }
 }
 
@@ -508,8 +685,10 @@ CRITICAL ELECTRICAL RULES:
                     raise ValueError("Gemini returned an empty response.")
                 design = CircuitDesign(**json.loads(previous_output))
                 validate_generated_design(design)
+                validate_prompt_requirements(prompt, design)
                 ensure_design_support_parts(design)
                 validate_generated_design(design)
+                validate_prompt_requirements(prompt, design)
                 design.warnings.append(
                     "AI-generated starter design: verify component pinouts, electrical ratings, power requirements, and wiring against current datasheets before assembly."
                 )
@@ -557,6 +736,121 @@ def validate_generated_design(design: CircuitDesign) -> None:
         raise ValueError("Generated design has no pin mappings.")
     if not design.firmwareCode.strip():
         raise ValueError("Generated design has no firmware sketch.")
+
+def validate_prompt_requirements(prompt: str, design: CircuitDesign) -> None:
+    """Reject generated designs that substitute explicitly requested parts or interfaces."""
+    component_text = " ".join(
+        f"{component.name} {component.description} {component.package}"
+        for component in design.components
+    )
+    component_names = " ".join(component.name for component in design.components)
+    component_ids = {
+        component.id: f"{component.name} {component.description} {component.package}"
+        for component in design.components
+    }
+    errors = []
+
+    required_parts = [
+        (r"\bmpu\s*6000\b", r"\bmpu\s*6000\b", "MPU6000"),
+        (r"\bmpu\s*6050\b", r"\bmpu\s*6050\b", "MPU6050"),
+        (r"\bbme\s*280\b", r"\bbme\s*280\b", "BME280"),
+        (r"\bdht\s*11\b", r"\bdht\s*11\b", "DHT11"),
+        (r"\bdht\s*22\b|\bam2302\b", r"\bdht\s*22\b|\bam2302\b", "DHT22 / AM2302"),
+        (r"\bds18b20\b", r"\bds18b20\b", "DS18B20"),
+        (r"\bhc[\s-]?sr04\b", r"\bhc[\s-]?sr04\b", "HC-SR04"),
+        (r"\bssd\s*1306\b", r"\bssd\s*1306\b", "SSD1306"),
+        (r"\bmax\s*98357a\b", r"\bmax\s*98357a\b", "MAX98357A"),
+        (r"\bl298n\b", r"\bl298n\b", "L298N"),
+        (r"\batmega\s*328p?\b", r"\batmega\s*328p?\b", "ATmega328P"),
+        (r"\bled\b", r"\bled\b", "LED"),
+        (r"\bpush[\s-]?button\b|\btactile\s+button\b", r"\bbutton\b|\bswitch\b", "pushbutton"),
+        (r"\brelay\b", r"\brelay\b", "relay"),
+        (r"\bservo(?:\s+motor)?\b", r"\bservo\b", "servo"),
+    ]
+    for requested, accepted, label in required_parts:
+        haystack = component_text if label in {"LED", "pushbutton", "relay", "servo"} else component_names
+        if re.search(requested, prompt, re.IGNORECASE) and not re.search(accepted, haystack, re.IGNORECASE):
+            errors.append(f"requested part {label} is missing or substituted")
+
+    requested_boards = [
+        (r"\b(?:arduino\s*uno|uno)\b", r"\barduino\s*uno\b", "Arduino Uno"),
+        (r"\b(?:arduino\s*nano|nano)\b", r"\barduino\s*nano\b", "Arduino Nano"),
+        (r"\b(?:arduino\s*mega|mega\s*2560)\b", r"\b(?:arduino\s*mega|mega\s*2560)\b", "Arduino Mega"),
+        (r"\besp[\s-]?32\b", r"\besp[\s-]?32\b", "ESP32"),
+        (r"\b(?:stm32|blackpill|nucleo)\b", r"\b(?:stm32|blackpill|nucleo)\b", "STM32"),
+        (r"\b(?:rp2040|raspberry\s*pi\s*pico|pico)\b", r"\b(?:rp2040|raspberry\s*pi\s*pico|pico)\b", "RP2040 / Raspberry Pi Pico"),
+    ]
+    for requested, accepted, label in requested_boards:
+        if re.search(requested, prompt, re.IGNORECASE) and not re.search(accepted, component_names, re.IGNORECASE):
+            errors.append(f"requested board {label} is missing or substituted")
+
+    interface_requirements = [
+        (r"\bi\s*2\s*c(?:\s*\d+)?\b|\bi²c\b", "I2C"),
+        (r"\bi\s*2\s*s(?:\s*\d+)?\b|\bi²s\b", "I2S"),
+        (r"\bspi(?:\s*\d+)?\b", "SPI"),
+        (r"\buart(?:\s*\d+)?\b", "UART"),
+        (r"\bpwm\b", "PWM"),
+        (r"\badc\b|\banalog\s+input\b", "ADC"),
+    ]
+    for requested, protocol in interface_requirements:
+        if re.search(requested, prompt, re.IGNORECASE) and not any(
+            mapping.protocol == protocol for mapping in design.pinMappings
+        ):
+            errors.append(f"requested {protocol} interface has no pin mappings")
+
+    named_parts = [
+        (requested, label) for requested, _, label in required_parts
+        if label in {"MPU6000", "MPU6050", "BME280", "DHT11", "DHT22 / AM2302", "DS18B20", "HC-SR04", "SSD1306"}
+        and re.search(requested, prompt, re.IGNORECASE)
+    ]
+    explicit_protocols = [
+        protocol for requested, protocol in interface_requirements
+        if re.search(requested, prompt, re.IGNORECASE)
+    ]
+    for requested, label in named_parts:
+        matching_ids = {
+            component_id for component_id, text in component_ids.items()
+            if re.search(requested, text, re.IGNORECASE)
+        }
+        if matching_ids and explicit_protocols and not any(
+            mapping.protocol in explicit_protocols
+            and (mapping.componentId in matching_ids or mapping.sourceComponentId in matching_ids)
+            for mapping in design.pinMappings
+        ):
+            errors.append(f"{label} is not connected using the requested interface")
+
+    if re.search(r"\b(?:motor|motors|esc|propeller)\b", prompt, re.IGNORECASE):
+        driver_text = " ".join(
+            f"{component.name} {component.description}"
+            for component in design.components
+            if component.category in {"Actuator", "Power"}
+        )
+        if not re.search(r"\b(?:esc|motor\s+driver|h[\s-]?bridge|l298n|tb6612|drv8833|mosfet|transistor)\b", driver_text, re.IGNORECASE):
+            errors.append("motor outputs have no identified driver or ESC stage")
+        if re.search(r"\bpwm\b", prompt, re.IGNORECASE) and not any(
+            mapping.protocol == "PWM"
+            and mapping.componentId in {
+                component.id for component in design.components
+                if component.category == "Actuator"
+            }
+            for mapping in design.pinMappings
+        ):
+            errors.append("PWM is not connected to an actuator or ESC input")
+
+    if re.search(r"\bmidi\b", prompt, re.IGNORECASE):
+        if not re.search(r"\b(?:din\s*(?:5|connector|jack)|midi\s+(?:input|in|din))\b", component_text, re.IGNORECASE):
+            errors.append("MIDI input connector is missing")
+        if not re.search(r"\b(?:optocoupler|opto[\s-]?isolat)\b", component_text, re.IGNORECASE):
+            errors.append("MIDI input isolation is missing")
+        if not any(mapping.protocol == "UART" for mapping in design.pinMappings):
+            errors.append("MIDI input has no UART pin mapping")
+        if not re.search(r"\b31250\b", design.firmwareCode):
+            errors.append("firmware does not configure the MIDI baud rate")
+        if not re.search(r"0x90", design.firmwareCode, re.IGNORECASE) or not re.search(r"0x80", design.firmwareCode, re.IGNORECASE):
+            errors.append("firmware does not handle MIDI note-on and note-off messages")
+
+    if errors:
+        raise ValueError("Prompt requirements not met: " + "; ".join(errors))
 
 def prompt_coverage_warnings(prompt: str, design: CircuitDesign) -> List[str]:
     """Flag explicit prompt requirements that are not evident in the generated design."""
@@ -1042,6 +1336,17 @@ def generate_circuit_endpoint(req: GenerateRequest):
         design.drcReport = run_drc(design)
         return design
 
+    if (
+        re.search(r"\b(?:stm32|blackpill)\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\b(?:drone|flight\s+controller|quadcopter|quadrotor)\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\bmpu\s*6000\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\bspi\b", req.prompt, re.IGNORECASE)
+    ):
+        design = CircuitDesign(**TEMPLATES["stm32-drone"])
+        design.id = f"stm32-flight-{uuid.uuid4().hex[:8]}"
+        design.drcReport = run_drc(design)
+        return design
+
     if re.search(r"\batmega\s*328(?:p)?\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:button|switch)\b", req.prompt, re.IGNORECASE):
         design = make_atmega_button_blink_design(req.prompt)
         design.warnings = []
@@ -1068,9 +1373,11 @@ def generate_circuit_endpoint(req: GenerateRequest):
     # 3. Intelligent fallback synthesis based on keywords
     prompt_lower = req.prompt.lower()
     base_key = "esp32-weather"
-    if any(term in prompt_lower for term in ("drone", "stm32", "flight")):
+    if any(term in prompt_lower for term in ("drone", "flight controller", "quadcopter", "quadrotor")) or (
+        "stm32" in prompt_lower and "mpu6000" in prompt_lower
+    ):
         base_key = "stm32-drone"
-    elif any(term in prompt_lower for term in ("synth", "pico", "audio", "rp2040")):
+    elif any(term in prompt_lower for term in ("synth", "pico", "audio", "rp2040", "midi")):
         base_key = "rpi-pico-synth"
     elif any(term in prompt_lower for term in ("bme280", "weather", "environmental", "oled", "ssd1306")) or (
         re.search(r"\btemperature\b", prompt_lower) and re.search(r"\b(?:humidity|pressure)\b", prompt_lower)
