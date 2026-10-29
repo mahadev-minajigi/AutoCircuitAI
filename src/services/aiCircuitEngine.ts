@@ -384,7 +384,7 @@ export async function generateCircuit(prompt: string, preset?: string): Promise<
     const fallback = generateCircuitLocal(prompt, preset);
     fallback.warnings = [
       ...fallback.warnings,
-      'The generation backend could not be reached. This is a local template fallback and may not match the prompt.',
+      'The generation backend could not be reached. This local template fallback may not match your prompt; review every component and connection.',
     ];
     return fallback;
   }

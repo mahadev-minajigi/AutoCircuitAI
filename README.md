@@ -84,7 +84,7 @@ The schematic should show four separate SPI routes: SCK, MISO, MOSI, and CS. The
 
 ## How Prompt Routing Works
 
-Typed custom prompts use the configured Gemini service before keyword-based local routing. If Gemini returns an invalid design or the configured backend fails, the app reports the failure instead of silently substituting another circuit. If the backend cannot be reached at all, the browser may load a local fallback, and clearly marks it as potentially unrelated. Without a Gemini key, the backend uses local examples for supported prompt types. Quick-start preset cards intentionally load their fixed example designs:
+Typed custom prompts use the configured Gemini service before keyword-based local routing. If Gemini returns an invalid design or the configured backend fails, the backend returns a clearly marked local fallback instead of leaving the user without a design; this fallback may not match the prompt and must be reviewed. If the backend cannot be reached, the browser may also load a marked local fallback. Without a Gemini key, the backend uses local examples for supported prompt types. Quick-start preset cards intentionally load their fixed example designs:
 
 - Prompts containing `stm32`, `drone`, or `flight` use the STM32F405 flight-controller template.
 - Prompts containing `pico`, `rp2040`, `synth`, or `audio` use the RP2040 audio template.
@@ -92,7 +92,7 @@ Typed custom prompts use the configured Gemini service before keyword-based loca
 - Arduino Uno pushbutton/LED prompts use the button-and-LED circuit; Arduino Uno blink/LED prompts use a dedicated LED circuit.
 - Arduino Uno motor prompts use the motor-controller template.
 
-The IDE uses the returned design as its single source for the circuit visualization, component list, pin mapping, DRC results, and firmware editor. If a prompt does not match a supported template and Gemini is unavailable, the app marks the chosen template as a starting point instead of presenting it as a prompt-matched circuit. Always verify a generated design before building hardware.
+The IDE uses the returned design as its single source for the circuit visualization, component list, pin mapping, DRC results, and firmware editor. If a prompt does not match a supported template and Gemini is unavailable, the app marks the chosen template as a starting point instead of presenting it as a prompt-matched circuit. The firmware output monitor explains when it cannot produce a firmware-derived waveform; it is not a circuit-generation failure. Always verify a generated design before building hardware.
 
 ## Project Structure
 

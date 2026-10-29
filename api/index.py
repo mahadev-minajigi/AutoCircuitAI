@@ -954,23 +954,28 @@ def generate_circuit_endpoint(req: GenerateRequest):
 
     # 2. If Gemini API key is present, try LLM synthesis
     api_key = os.getenv("GEMINI_API_KEY")
+    gemini_fallback_warning = None
     if api_key and api_key != "your_gemini_api_key_here":
         try:
             design = generate_with_gemini(req.prompt, api_key)
             design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
             return design
-        except Exception as error:
-            raise HTTPException(
-                status_code=502,
-                detail="Gemini could not return a structurally valid design. Review the prompt and retry; no fallback circuit was substituted.",
-            ) from error
+        except Exception:
+            print("Gemini generation failed; using local fallback.")
+            gemini_fallback_warning = (
+                "Gemini could not generate a usable design for this request. A local template fallback is shown and may not match your prompt; review every component and connection."
+            )
 
     if re.search(r"\b(?:push[ -]?button|button)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:blink|led)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
         design = make_button_led_design(req.prompt)
+        if gemini_fallback_warning:
+            design.warnings.append(gemini_fallback_warning)
         design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
         return design
     if re.search(r"\b(?:blink|flash)\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
         design = make_blink_led_design(req.prompt)
+        if gemini_fallback_warning:
+            design.warnings.append(gemini_fallback_warning)
         design.warnings.extend(prompt_coverage_warnings(req.prompt, design))
         return design
 
@@ -998,6 +1003,8 @@ def generate_circuit_endpoint(req: GenerateRequest):
         pinMappings=[PinMapping(**p) for p in base["pinMappings"]],
         firmwareCode=base["firmwareCode"],
         warnings=(
+            [gemini_fallback_warning]
+            if gemini_fallback_warning else
             ["Template-matched circuit generated for this supported request. Verify the DRC report before prototyping."]
             if supported_match else
             [f"This request could not be matched to a validated local circuit template. The displayed {base['title']} design is only a starting point and may not meet the prompt. Configure the AI backend for custom circuit synthesis."]

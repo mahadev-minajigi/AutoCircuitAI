@@ -73,9 +73,9 @@ function App() {
         setDesign(result);
         setHistory(prev => [...prev, { design: result, prompt, timestamp: Date.now() }]);
         setActiveTab('schematic');
-        const usedLocalFallback = result.warnings.some(warning => warning.includes('generation backend could not be reached'));
+        const usedLocalFallback = result.warnings.some(warning => /local template fallback/i.test(warning));
         showToast(
-          usedLocalFallback ? 'Backend unavailable; loaded a local template that may not match.' : `Design ready: ${result.title}`,
+          usedLocalFallback ? 'AI generation unavailable; loaded a local template that may not match.' : `Design ready: ${result.title}`,
           usedLocalFallback ? 'error' : 'success',
         );
       } catch (error) {

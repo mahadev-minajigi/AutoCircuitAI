@@ -113,7 +113,9 @@ const OscilloscopeViewer: React.FC<OscilloscopeViewerProps> = ({ isSimulating = 
         ctx.fillStyle = '#cbd5e1';
         ctx.textAlign = 'center';
         ctx.font = '12px system-ui, sans-serif';
-        ctx.fillText('This sketch is outside the supported visual model.', width / 2, height / 2);
+        ctx.fillText('No firmware-derived waveform is available for this sketch.', width / 2, height / 2 - 7);
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.fillText('Preview supports straight-line digitalWrite() and delay() only.', width / 2, height / 2 + 13);
       }
 
       animId = requestAnimationFrame(renderScope);
