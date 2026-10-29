@@ -14,17 +14,22 @@ export function runDRC(design: CircuitDesign): DrcRule[] {
 
   // Voltage compatibility check
   design.components.forEach(comp => {
-    const hasLogicSignal = design.pinMappings.some(mapping => mapping.componentId === comp.id && ['GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'I2S'].includes(mapping.protocol));
-    if (comp.id !== mcu.id && hasLogicSignal && comp.operatingVoltage && mcu.operatingVoltage) {
-      if (comp.operatingVoltage > mcu.operatingVoltage) {
+    const logicSources = design.pinMappings
+      .filter(mapping => mapping.componentId === comp.id && ['GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'I2S'].includes(mapping.protocol))
+      .map(mapping => design.components.find(component => component.id === mapping.sourceComponentId) ?? mcu)
+      .filter((source): source is NonNullable<typeof source> => Boolean(source?.operatingVoltage));
+    if (comp.id !== mcu.id && logicSources.length > 0 && comp.operatingVoltage) {
+      const sourceVoltage = Math.max(...logicSources.map(source => source.operatingVoltage ?? 0));
+      const ahctAccepts3v3 = /74ahct125/i.test(comp.name) && sourceVoltage >= 2 && sourceVoltage <= 3.6;
+      if (sourceVoltage > 0 && comp.operatingVoltage > sourceVoltage && !ahctAccepts3v3) {
         rules.push({
           type: 'Warning',
-          message: `Voltage mismatch on ${comp.name} | ${comp.name} operates at ${comp.operatingVoltage}V but ${mcu.name} logic level is ${mcu.operatingVoltage}V. | Use a level shifter or choose a ${mcu.operatingVoltage}V-compatible variant.`
+          message: `Voltage mismatch on ${comp.name} | ${comp.name} operates at ${comp.operatingVoltage}V but its mapped logic source is ${sourceVoltage}V. | Use a level shifter or choose a compatible variant.`
         });
       } else {
         rules.push({
           type: 'Pass',
-          message: `${comp.name} voltage compatible | ${comp.name} (${comp.operatingVoltage}V) is compatible with ${mcu.name} (${mcu.operatingVoltage}V). | No change required.`
+          message: `${comp.name} voltage compatible | ${comp.name} (${comp.operatingVoltage}V) accepts its mapped logic source (${sourceVoltage || 'unspecified'}V). | No change required.`
         });
       }
     }
@@ -394,6 +399,25 @@ void loop() {
 }
 
 export function generateCircuitLocal(prompt: string, preset?: string): CircuitDesign {
+  if (
+    !preset &&
+    /\besp[\s-]?32\b/i.test(prompt) &&
+    /\b(?:ws\s*2812b?|neopixel|addressable\s+(?:rgb\s+)?led)\b/i.test(prompt) &&
+    /\b(?:rotary\s+encoder|encoder)\b/i.test(prompt)
+  ) {
+    const template = templates['esp32-mood-light'];
+    const design: CircuitDesign = {
+      ...template,
+      id: `mood-light-${Math.random().toString(36).slice(2, 9)}`,
+      description: `${template.description} Requested project: ${prompt}`,
+      components: template.components.map(component => ({ ...component, pins: [...component.pins] })),
+      pinMappings: template.pinMappings.map(mapping => ({ ...mapping })),
+      warnings: [],
+    };
+    design.drcReport = runDRC(design);
+    return design;
+  }
+
   if (!preset && /\batmega\s*328(?:p)?\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:button|switch)\b/i.test(prompt)) {
     const design = makeAtmegaButtonBlinkDesign(prompt);
     design.warnings = [];

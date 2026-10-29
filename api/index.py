@@ -97,20 +97,28 @@ def run_drc(design: CircuitDesign) -> List[DrcRule]:
 
     # Voltage check
     for comp in design.components:
-        has_logic_signal = any(
-            mapping.componentId == comp.id and mapping.protocol in {'GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'I2S'}
+        logic_sources = [
+            next((source for source in design.components if source.id == mapping.sourceComponentId), mcu)
             for mapping in design.pinMappings
-        )
-        if comp.id != mcu.id and has_logic_signal and comp.operatingVoltage and mcu.operatingVoltage:
-            if comp.operatingVoltage > mcu.operatingVoltage:
+            if mapping.componentId == comp.id
+            and mapping.protocol in {'GPIO', 'I2C', 'SPI', 'UART', 'ADC', 'PWM', 'I2S'}
+        ]
+        if comp.id != mcu.id and logic_sources and comp.operatingVoltage:
+            source_voltages = [source.operatingVoltage for source in logic_sources if source and source.operatingVoltage]
+            source_voltage = max(source_voltages, default=mcu.operatingVoltage or 0)
+            ahct_accepts_3v3 = (
+                re.search(r"\b74ahct125\b", comp.name, re.IGNORECASE)
+                and 2.0 <= source_voltage <= 3.6
+            )
+            if source_voltage and comp.operatingVoltage > source_voltage and not ahct_accepts_3v3:
                 rules.append(DrcRule(
                     type="Warning",
-                    message=f"Voltage mismatch on {comp.name} | {comp.name} operates at {comp.operatingVoltage}V but {mcu.name} logic level is {mcu.operatingVoltage}V. | Use a level shifter or choose a {mcu.operatingVoltage}V-compatible variant."
+                    message=f"Voltage mismatch on {comp.name} | {comp.name} operates at {comp.operatingVoltage}V but its mapped logic source is {source_voltage}V. | Use a level shifter or choose a compatible variant."
                 ))
             else:
                 rules.append(DrcRule(
                     type="Pass",
-                    message=f"{comp.name} voltage compatible | {comp.name} ({comp.operatingVoltage}V) is compatible with {mcu.name} ({mcu.operatingVoltage}V). | No change required."
+                    message=f"{comp.name} voltage compatible | {comp.name} ({comp.operatingVoltage}V) accepts its mapped logic source ({source_voltage or 'unspecified'}V). | No change required."
                 ))
 
     # Validate every generated connection endpoint before presenting a schematic.
@@ -351,6 +359,118 @@ void loop() {
   delay(2000);
 }""",
         "warnings": ["Ensure BME280 I2C address is configured to 0x76."]
+    },
+    "esp32-mood-light": {
+        "id": "esp32-ws2812-encoder-mood-light-v1",
+        "title": "ESP32 WS2812B Rotary Mood Light",
+        "description": "ESP32 controls a 16-pixel WS2812B strip through a 5V logic buffer. A rotary encoder changes hue when turned and brightness while its push switch is held.",
+        "components": [
+            {"id": "mcu1", "name": "ESP32-WROOM-32 Development Board", "description": "3.3V logic MCU. GPIO18 drives LED data through a 5V AHCT buffer; GPIO32/GPIO33 read the encoder and GPIO25 reads its push switch.", "category": "MCU", "package": "Development board", "estimatedCost": 350.0, "pins": ["5V", "3V3", "GND", "GPIO18", "GPIO25", "GPIO32", "GPIO33"], "operatingVoltage": 3.3, "maxCurrent_mA": 350},
+            {"id": "strip1", "name": "16-pixel WS2812B RGB LED strip", "description": "5V addressable RGB strip segment. Power from the external 5V supply, not from an ESP32 GPIO or 3.3V pin.", "category": "Actuator", "package": "16-pixel strip segment", "estimatedCost": 300.0, "pins": ["5V", "DIN", "GND"], "operatingVoltage": 5.0, "maxCurrent_mA": 960},
+            {"id": "enc1", "name": "Rotary encoder with push switch", "description": "Incremental quadrature encoder with A, B, common, and independent push-switch contacts; ESP32 internal pull-ups are enabled in firmware.", "category": "Sensor", "package": "EC11 panel-mount encoder", "estimatedCost": 35.0, "pins": ["A", "B", "COM", "SW1", "SW2"], "operatingVoltage": 3.3, "maxCurrent_mA": 1},
+            {"id": "u2", "name": "74AHCT125 single-channel 5V logic buffer", "description": "5V-powered AHCT buffer translates the ESP32 3.3V data signal to a WS2812B-compatible 5V logic level. Tie active-low OE to ground.", "category": "Passive", "package": "DIP/SOIC buffer module", "estimatedCost": 25.0, "pins": ["VCC", "GND", "A", "Y", "OE"], "operatingVoltage": 5.0, "maxCurrent_mA": 2},
+            {"id": "psu1", "name": "Regulated 5V 2A DC supply", "description": "External regulated supply for the LED strip and buffer. Supply capacity is shared with the ESP32 board; connect all grounds together.", "category": "Power", "package": "5V DC supply connector", "estimatedCost": 180.0, "pins": ["VOUT", "GND"], "operatingVoltage": 5.0},
+            {"id": "r1", "name": "330Ω LED data series resistor", "description": "Series resistor between the 74AHCT125 output and WS2812B DIN; place near the strip data input.", "category": "Passive", "package": "Axial resistor", "estimatedCost": 2.0, "pins": ["1", "2"], "operatingVoltage": 5.0, "maxCurrent_mA": 1},
+            {"id": "c1", "name": "1000µF LED supply bulk capacitor", "description": "Electrolytic capacitor across strip 5V and GND near the strip input; observe polarity.", "category": "Passive", "package": "Electrolytic capacitor", "estimatedCost": 8.0, "pins": ["+", "-"], "operatingVoltage": 6.3}
+        ],
+        "pinMappings": [
+            {"mcuPin": "5V", "sourceComponentId": "psu1", "sourceComponentPin": "VOUT", "componentId": "mcu1", "componentPin": "5V", "protocol": "Power", "description": "Regulated 5V supply to ESP32 board 5V/VIN input"},
+            {"mcuPin": "GND", "sourceComponentId": "psu1", "sourceComponentPin": "GND", "componentId": "mcu1", "componentPin": "GND", "protocol": "GND", "description": "Common ground from supply to ESP32"},
+            {"mcuPin": "5V", "sourceComponentId": "psu1", "sourceComponentPin": "VOUT", "componentId": "strip1", "componentPin": "5V", "protocol": "Power", "description": "External 5V power to WS2812B strip"},
+            {"mcuPin": "GND", "sourceComponentId": "psu1", "sourceComponentPin": "GND", "componentId": "strip1", "componentPin": "GND", "protocol": "GND", "description": "Common supply ground to LED strip"},
+            {"mcuPin": "5V", "sourceComponentId": "psu1", "sourceComponentPin": "VOUT", "componentId": "u2", "componentPin": "VCC", "protocol": "Power", "description": "5V supply to 74AHCT125 buffer"},
+            {"mcuPin": "GND", "sourceComponentId": "psu1", "sourceComponentPin": "GND", "componentId": "u2", "componentPin": "GND", "protocol": "GND", "description": "Common ground to logic buffer"},
+            {"mcuPin": "GND", "componentId": "u2", "componentPin": "OE", "protocol": "GND", "description": "Enable the buffer by tying active-low OE to ground"},
+            {"mcuPin": "GPIO18", "componentId": "u2", "componentPin": "A", "protocol": "GPIO", "description": "ESP32 LED data output to 74AHCT125 input"},
+            {"mcuPin": "Y", "sourceComponentId": "u2", "sourceComponentPin": "Y", "componentId": "r1", "componentPin": "1", "protocol": "GPIO", "description": "5V-buffered data output to series resistor"},
+            {"mcuPin": "DATA", "sourceComponentId": "r1", "sourceComponentPin": "2", "componentId": "strip1", "componentPin": "DIN", "protocol": "GPIO", "description": "Buffered WS2812B data through 330Ω resistor to strip DIN"},
+            {"mcuPin": "5V", "sourceComponentId": "psu1", "sourceComponentPin": "VOUT", "componentId": "c1", "componentPin": "+", "protocol": "Power", "description": "Bulk capacitor positive to 5V LED supply"},
+            {"mcuPin": "GND", "sourceComponentId": "psu1", "sourceComponentPin": "GND", "componentId": "c1", "componentPin": "-", "protocol": "GND", "description": "Bulk capacitor negative to ground"},
+            {"mcuPin": "GPIO32", "componentId": "enc1", "componentPin": "A", "protocol": "GPIO", "description": "Rotary encoder quadrature channel A with internal pull-up"},
+            {"mcuPin": "GPIO33", "componentId": "enc1", "componentPin": "B", "protocol": "GPIO", "description": "Rotary encoder quadrature channel B with internal pull-up"},
+            {"mcuPin": "GPIO25", "componentId": "enc1", "componentPin": "SW1", "protocol": "GPIO", "description": "Encoder push switch for brightness adjustment mode"},
+            {"mcuPin": "GND", "componentId": "enc1", "componentPin": "COM", "protocol": "GND", "description": "Encoder quadrature common to ground"},
+            {"mcuPin": "GND", "componentId": "enc1", "componentPin": "SW2", "protocol": "GND", "description": "Encoder push-switch return to ground"}
+        ],
+        "labGuide": {
+            "voltageSupplyNote": "Use a regulated 5V supply with enough current for the strip segment. This design limits brightness and uses a 16-pixel segment; longer strips need a separately sized supply and suitable power injection. Never power the strip from an ESP32 GPIO.",
+            "prerequisites": [
+                "ESP32-WROOM-32 development board",
+                "16-pixel WS2812B strip segment",
+                "Rotary encoder with push switch",
+                "74AHCT125 level-buffer module",
+                "Regulated 5V 2A supply, 330Ω resistor, and 1000µF capacitor",
+                "Arduino IDE with Adafruit NeoPixel library"
+            ],
+            "breadboardWiringSteps": [
+                {"stepNumber": 1, "title": "Connect the ESP32 and supply grounds", "instruction": "Power the ESP32 board from the regulated 5V supply at its 5V/VIN input. Connect the supply negative to ESP32 GND, LED strip GND, encoder common, and buffer GND."},
+                {"stepNumber": 2, "title": "Power the LED strip and buffer", "instruction": "Connect the external 5V supply to strip 5V and 74AHCT125 VCC. Connect 74AHCT125 GND to common ground and tie its active-low OE pin to ground. Do not feed the strip from the ESP32 3V3 output."},
+                {"stepNumber": 3, "title": "Wire the LED data path", "instruction": "Connect ESP32 GPIO18 to buffer input A. Connect buffer output Y through the 330Ω resistor to strip DIN. Place the 1000µF capacitor across strip 5V and GND with correct polarity."},
+                {"stepNumber": 4, "title": "Connect the rotary encoder", "instruction": "Connect encoder A to GPIO32, B to GPIO33, COM to GND, switch SW1 to GPIO25, and SW2 to GND. Firmware enables internal pull-ups."}
+            ],
+            "testingProcedure": [
+                "Install the Adafruit NeoPixel library and select an ESP32-WROOM-32 board.",
+                "Power the strip from the 5V supply and upload the sketch.",
+                "Turn the encoder to change hue; hold its switch while turning to change brightness."
+            ],
+            "troubleshootingTips": [
+                "Strip stays dark: check strip direction, DIN versus DOUT, common ground, 5V polarity, and buffer OE.",
+                "Random colors or flicker: check the 74AHCT125 level shifter, 330Ω data resistor, and bulk capacitor placement.",
+                "Encoder direction is reversed: swap A/B or reverse the direction increment in firmware."
+            ]
+        },
+        "firmwareCode": """#include <Arduino.h>
+#include <Adafruit_NeoPixel.h>
+
+constexpr uint8_t LED_PIN = 18;
+constexpr uint8_t ENCODER_A = 32;
+constexpr uint8_t ENCODER_B = 33;
+constexpr uint8_t ENCODER_SW = 25;
+constexpr uint16_t LED_COUNT = 16;
+constexpr uint8_t MAX_BRIGHTNESS = 160;
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+const int8_t transitions[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
+uint8_t previousEncoder = 0;
+int8_t encoderSteps = 0;
+uint16_t hue = 0;
+uint8_t brightness = 96;
+
+void setup() {
+  pinMode(ENCODER_A, INPUT_PULLUP);
+  pinMode(ENCODER_B, INPUT_PULLUP);
+  pinMode(ENCODER_SW, INPUT_PULLUP);
+  previousEncoder = (digitalRead(ENCODER_A) << 1) | digitalRead(ENCODER_B);
+  strip.begin();
+  strip.setBrightness(brightness);
+  strip.show();
+}
+
+void loop() {
+  const uint8_t current = (digitalRead(ENCODER_A) << 1) | digitalRead(ENCODER_B);
+  encoderSteps += transitions[(previousEncoder << 2) | current];
+  previousEncoder = current;
+
+  bool changed = false;
+  if (encoderSteps >= 4 || encoderSteps <= -4) {
+    const int8_t direction = encoderSteps > 0 ? 1 : -1;
+    encoderSteps = 0;
+    if (digitalRead(ENCODER_SW) == LOW) {
+      brightness = constrain(static_cast<int>(brightness) + direction * 8, 8, MAX_BRIGHTNESS);
+    } else {
+      hue += direction * 512;
+    }
+    changed = true;
+  }
+
+  if (changed) {
+    const uint32_t color = strip.ColorHSV(hue, 255, 255);
+    for (uint16_t i = 0; i < LED_COUNT; ++i) strip.setPixelColor(i, color);
+    strip.setBrightness(brightness);
+    strip.show();
+  }
+  delay(1);
+}""",
+        "warnings": []
     },
     "stm32-drone": {
         "id": "stm32-mpu6000-flight-v2",
@@ -760,6 +880,8 @@ def validate_prompt_requirements(prompt: str, design: CircuitDesign) -> None:
         (r"\bhc[\s-]?sr04\b", r"\bhc[\s-]?sr04\b", "HC-SR04"),
         (r"\bssd\s*1306\b", r"\bssd\s*1306\b", "SSD1306"),
         (r"\bmax\s*98357a\b", r"\bmax\s*98357a\b", "MAX98357A"),
+        (r"\bws\s*2812b?\b|\bneopixel\b", r"\bws\s*2812b?\b|\bneopixel\b", "WS2812B addressable LED"),
+        (r"\brotary\s+encoder\b|\bencoder\b", r"\brotary\s+encoder\b|\bencoder\b", "rotary encoder"),
         (r"\bl298n\b", r"\bl298n\b", "L298N"),
         (r"\batmega\s*328p?\b", r"\batmega\s*328p?\b", "ATmega328P"),
         (r"\bled\b", r"\bled\b", "LED"),
@@ -848,6 +970,33 @@ def validate_prompt_requirements(prompt: str, design: CircuitDesign) -> None:
             errors.append("firmware does not configure the MIDI baud rate")
         if not re.search(r"0x90", design.firmwareCode, re.IGNORECASE) or not re.search(r"0x80", design.firmwareCode, re.IGNORECASE):
             errors.append("firmware does not handle MIDI note-on and note-off messages")
+
+    if re.search(r"\bws\s*2812b?\b|\bneopixel\b", prompt, re.IGNORECASE):
+        strip_ids = {
+            component.id for component in design.components
+            if re.search(r"\bws\s*2812b?\b|\bneopixel\b", f"{component.name} {component.description}", re.IGNORECASE)
+        }
+        data_is_mapped = any(
+            mapping.protocol == "GPIO"
+            and (mapping.componentId in strip_ids or mapping.sourceComponentId in strip_ids)
+            for mapping in design.pinMappings
+        )
+        if strip_ids and not data_is_mapped:
+            errors.append("addressable LED data input has no GPIO connection")
+        if not re.search(r"\b(?:74ahct|74hct|level[\s-]?shifter|logic[\s-]?buffer)\b", component_text, re.IGNORECASE):
+            errors.append("3.3V-to-5V addressable LED data buffer is missing")
+
+    if re.search(r"\brotary\s+encoder\b|\bencoder\b", prompt, re.IGNORECASE):
+        encoder_ids = {
+            component.id for component in design.components
+            if re.search(r"\b(?:rotary\s+encoder|encoder)\b", component.name, re.IGNORECASE)
+        }
+        encoder_mappings = [
+            mapping for mapping in design.pinMappings
+            if mapping.protocol == "GPIO" and mapping.componentId in encoder_ids
+        ]
+        if len(encoder_mappings) < 3:
+            errors.append("rotary encoder channels and push switch are not mapped to GPIO")
 
     if errors:
         raise ValueError("Prompt requirements not met: " + "; ".join(errors))
@@ -1344,6 +1493,16 @@ def generate_circuit_endpoint(req: GenerateRequest):
     ):
         design = CircuitDesign(**TEMPLATES["stm32-drone"])
         design.id = f"stm32-flight-{uuid.uuid4().hex[:8]}"
+        design.drcReport = run_drc(design)
+        return design
+
+    if (
+        re.search(r"\besp[\s-]?32\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\b(?:ws\s*2812b?|neopixel|addressable\s+(?:rgb\s+)?led)\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\b(?:rotary\s+encoder|encoder)\b", req.prompt, re.IGNORECASE)
+    ):
+        design = CircuitDesign(**TEMPLATES["esp32-mood-light"])
+        design.id = f"esp32-mood-light-{uuid.uuid4().hex[:8]}"
         design.drcReport = run_drc(design)
         return design
 
