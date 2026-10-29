@@ -310,7 +310,93 @@ void loop() {
   return design;
 }
 
+function makeAtmegaButtonBlinkDesign(prompt: string): CircuitDesign {
+  const components: CircuitDesign['components'] = [
+    { id: 'u1', name: 'ATmega328P-PU', description: '5V 8-bit AVR microcontroller in a 28-pin DIP package; use a 16MHz crystal for Arduino-compatible timing.', category: 'MCU', package: 'DIP-28', estimatedCost: 120, pins: ['VCC', 'AVCC', 'GND', 'RESET', 'XTAL1', 'XTAL2', 'PD7', 'PB5'], operatingVoltage: 5, maxCurrent_mA: 15 },
+    { id: 'j1', name: 'Regulated 5V supply', description: 'Regulated 5V supply for the ATmega328P circuit; share the ground with all components.', category: 'Power', package: '2-pin connector', estimatedCost: 20, pins: ['5V', 'GND'], operatingVoltage: 5, maxCurrent_mA: 0 },
+    { id: 'sw1', name: 'External momentary pushbutton', description: 'Normally-open button; use one contact pair on each side of the switch.', category: 'Actuator', package: 'Through-hole tactile switch', estimatedCost: 10, pins: ['1', '2', '3', '4'], operatingVoltage: 5, maxCurrent_mA: 1 },
+    { id: 'r_button', name: '10kΩ button pull-down resistor', description: 'Holds PD7 LOW while the button is released.', category: 'Passive', package: 'Axial resistor', estimatedCost: 2, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 0.5 },
+    { id: 'd1', name: 'Indicator LED', description: 'LED controlled by PB5 (Arduino-compatible digital pin 13).', category: 'Actuator', package: '5mm LED', estimatedCost: 3, pins: ['ANODE', 'CATHODE'], operatingVoltage: 2, maxCurrent_mA: 8 },
+    { id: 'r_led', name: '330Ω LED current-limiting resistor', description: 'Series resistor between PB5 and the LED anode.', category: 'Passive', package: 'Axial resistor', estimatedCost: 2, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 8 },
+    { id: 'x1', name: '16MHz crystal', description: 'External clock crystal connected between XTAL1 and XTAL2.', category: 'Passive', package: 'Through-hole crystal', estimatedCost: 10, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 0 },
+    { id: 'c1', name: '22pF crystal load capacitor (XTAL1)', description: 'Connect between the XTAL1 crystal node and GND; verify crystal datasheet load capacitance.', category: 'Passive', package: 'Ceramic capacitor', estimatedCost: 2, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 0 },
+    { id: 'c2', name: '22pF crystal load capacitor (XTAL2)', description: 'Connect between the XTAL2 crystal node and GND; verify crystal datasheet load capacitance.', category: 'Passive', package: 'Ceramic capacitor', estimatedCost: 2, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 0 },
+    { id: 'r_reset', name: '10kΩ RESET pull-up resistor', description: 'Keeps RESET deasserted by pulling it up to 5V.', category: 'Passive', package: 'Axial resistor', estimatedCost: 2, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 0.5 },
+    { id: 'c_decouple', name: '100nF decoupling capacitor', description: 'Place close to the ATmega328P VCC and GND pins.', category: 'Passive', package: 'Ceramic capacitor', estimatedCost: 2, pins: ['1', '2'], operatingVoltage: 5, maxCurrent_mA: 0 },
+  ];
+  const pinMappings: CircuitDesign['pinMappings'] = [
+    { mcuPin: '5V', sourceComponentId: 'j1', sourceComponentPin: '5V', componentId: 'u1', componentPin: 'VCC', protocol: 'Power', description: 'Regulated 5V supply to ATmega328P VCC.' },
+    { mcuPin: '5V', sourceComponentId: 'j1', sourceComponentPin: '5V', componentId: 'u1', componentPin: 'AVCC', protocol: 'Power', description: 'Tie AVCC to 5V even when the ADC is unused.' },
+    { mcuPin: 'GND', sourceComponentId: 'j1', sourceComponentPin: 'GND', componentId: 'u1', componentPin: 'GND', protocol: 'GND', description: 'Common ground for ATmega328P.' },
+    { mcuPin: '5V', sourceComponentId: 'j1', sourceComponentPin: '5V', componentId: 'sw1', componentPin: '1', protocol: 'Power', description: 'Button supply side; pins 1/2 are one internally connected pair.' },
+    { mcuPin: 'PD7', componentId: 'sw1', componentPin: '3', protocol: 'GPIO', description: 'Button signal; pins 3/4 are the other internally connected pair.' },
+    { mcuPin: 'PD7', componentId: 'r_button', componentPin: '1', protocol: 'GPIO', description: 'Button input node to pull-down resistor.' },
+    { mcuPin: 'GND', sourceComponentId: 'j1', sourceComponentPin: 'GND', componentId: 'r_button', componentPin: '2', protocol: 'GND', description: 'Pull-down resistor returns to common ground.' },
+    { mcuPin: 'PB5', componentId: 'r_led', componentPin: '1', protocol: 'GPIO', description: 'PB5 drives the LED through its series resistor.' },
+    { mcuPin: 'PB5', sourceComponentId: 'r_led', sourceComponentPin: '2', componentId: 'd1', componentPin: 'ANODE', protocol: 'GPIO', description: 'Resistor output to LED anode.' },
+    { mcuPin: 'GND', sourceComponentId: 'j1', sourceComponentPin: 'GND', componentId: 'd1', componentPin: 'CATHODE', protocol: 'GND', description: 'LED cathode returns to common ground.' },
+    { mcuPin: 'XTAL1', componentId: 'x1', componentPin: '1', protocol: 'GPIO', description: 'Crystal terminal 1 to XTAL1.' },
+    { mcuPin: 'XTAL2', componentId: 'x1', componentPin: '2', protocol: 'GPIO', description: 'Crystal terminal 2 to XTAL2.' },
+    { mcuPin: 'XTAL1', componentId: 'c1', componentPin: '1', protocol: 'GPIO', description: 'XTAL1 crystal node to load capacitor.' },
+    { mcuPin: 'GND', sourceComponentId: 'j1', sourceComponentPin: 'GND', componentId: 'c1', componentPin: '2', protocol: 'GND', description: 'XTAL1 load capacitor to ground.' },
+    { mcuPin: 'XTAL2', componentId: 'c2', componentPin: '1', protocol: 'GPIO', description: 'XTAL2 crystal node to load capacitor.' },
+    { mcuPin: 'GND', sourceComponentId: 'j1', sourceComponentPin: 'GND', componentId: 'c2', componentPin: '2', protocol: 'GND', description: 'XTAL2 load capacitor to ground.' },
+    { mcuPin: 'RESET', componentId: 'r_reset', componentPin: '1', protocol: 'GPIO', description: 'RESET pin to pull-up resistor.' },
+    { mcuPin: '5V', sourceComponentId: 'j1', sourceComponentPin: '5V', componentId: 'r_reset', componentPin: '2', protocol: 'Power', description: 'RESET pull-up terminates at 5V.' },
+    { mcuPin: '5V', sourceComponentId: 'j1', sourceComponentPin: '5V', componentId: 'c_decouple', componentPin: '1', protocol: 'Power', description: 'Local VCC decoupling capacitor.' },
+    { mcuPin: 'GND', sourceComponentId: 'j1', sourceComponentPin: 'GND', componentId: 'c_decouple', componentPin: '2', protocol: 'GND', description: 'Local decoupling capacitor ground.' },
+  ];
+  const design: CircuitDesign = {
+    id: `atmega-button-blink-${Math.random().toString(36).slice(2, 9)}`,
+    title: 'ATmega328P Pushbutton-Controlled LED Blinker',
+    description: `A standalone ATmega328P-PU circuit where an external pushbutton toggles a 1Hz LED blink on PB5. Requested project: ${prompt}`,
+    components,
+    pinMappings,
+    firmwareCode: `const uint8_t buttonPin = 7; // PD7
+const uint8_t ledPin = 13;    // PB5
+bool blinking = false;
+bool lastButtonReading = LOW;
+bool buttonState = LOW;
+unsigned long lastDebounceTime = 0;
+unsigned long lastBlinkTime = 0;
+const unsigned long debounceMs = 30;
+const unsigned long blinkIntervalMs = 500;
+
+void setup() {
+  pinMode(buttonPin, INPUT);  // External 10kΩ pull-down
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  const bool reading = digitalRead(buttonPin);
+  if (reading != lastButtonReading) lastDebounceTime = millis();
+  if (millis() - lastDebounceTime >= debounceMs && reading != buttonState) {
+    buttonState = reading;
+    if (buttonState == HIGH) blinking = !blinking;
+  }
+  lastButtonReading = reading;
+
+  if (!blinking) {
+    digitalWrite(ledPin, LOW);
+  } else if (millis() - lastBlinkTime >= blinkIntervalMs) {
+    lastBlinkTime = millis();
+    digitalWrite(ledPin, digitalRead(ledPin) == LOW ? HIGH : LOW);
+  }
+}`,
+    warnings: [
+      'This is a bare ATmega328P circuit: provide a regulated 5V supply, program the chip using an ISP programmer or a preloaded bootloader, and configure fuses for the 16MHz crystal.',
+      'The 16MHz crystal and its load capacitors must match the crystal datasheet. Confirm the MCU package pinout before wiring.',
+      'The output monitor cannot model button input, conditionals, or millis()-based timing, so it will not show a firmware-derived waveform for this sketch.',
+    ],
+  };
+  design.drcReport = runDRC(design);
+  return design;
+}
+
 export function generateCircuitLocal(prompt: string, preset?: string): CircuitDesign {
+  if (!preset && /\batmega\s*328(?:p)?\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:button|switch)\b/i.test(prompt)) {
+    return makeAtmegaButtonBlinkDesign(prompt);
+  }
   if (!preset && /\b(?:push[ -]?button|button)\b/i.test(prompt) && /\b(?:blink|led)\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt)) {
     const design = { ...buttonLedTemplate, components: buttonLedTemplate.components.map(component => ({ ...component, pins: [...component.pins] })), pinMappings: buttonLedTemplate.pinMappings.map(mapping => ({ ...mapping })) };
     design.id = `button-led-${Math.random().toString(36).slice(2, 9)}`;

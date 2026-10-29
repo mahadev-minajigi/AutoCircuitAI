@@ -757,31 +757,34 @@ body {
   font-size: 0.9rem;
   font-weight: 500;
   min-width: 260px;
-  max-width: 380px;
+  max-width: 420px;
   border: 1px solid transparent;
   animation: toast-in 0.28s cubic-bezier(0.22,1,0.36,1) both;
   pointer-events: all;
-  backdrop-filter: blur(10px);
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
 }
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(16px) scale(0.96); }
   to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
-.toast-success { background: rgba(0,40,22,0.92); border-color: var(--accent-emerald); color: var(--accent-emerald); }
-.toast-error   { background: rgba(40,0,14,0.92); border-color: var(--accent-rose);   color: var(--accent-rose); }
-.toast-info    { background: rgba(0,20,30,0.92); border-color: var(--accent-cyan);   color: var(--accent-cyan); }
-.toast-message { flex: 1; color: var(--text-main); }
+.toast-success { background: #ecfdf5; border-color: #059669; color: #065f46; }
+.toast-error   { background: #fff1f2; border-color: #e11d48; color: #9f1239; }
+.toast-info    { background: #eff6ff; border-color: #2563eb; color: #1e40af; }
+.toast-item > svg { flex: 0 0 auto; }
+.toast-message { flex: 1; min-width: 0; color: inherit; overflow-wrap: anywhere; }
 .toast-close {
   background: transparent;
   border: none;
   cursor: pointer;
-  color: var(--text-muted);
+  color: currentColor;
   padding: 2px;
   display: grid;
   place-items: center;
   border-radius: 3px;
+  opacity: 0.8;
 }
-.toast-close:hover { color: var(--text-main); }
+.toast-close:hover { opacity: 1; }
 
 /* ─── Design history panel ───────────────────────────────────── */
 .design-history {
@@ -2834,5 +2837,4 @@ body {
   width: 100%;
   height: 160px;
 }
-
 
