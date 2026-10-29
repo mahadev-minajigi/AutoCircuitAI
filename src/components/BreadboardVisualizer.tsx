@@ -1,5 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Pause, Play, RotateCcw } from 'lucide-react';
 import type { CircuitDesign } from '../types/circuit';
+import { analyzeFirmwareForSimulation, firmwareDrivesPin, getLedStatesAt, getOutputStateAt } from '../services/firmwareSimulation';
 
 interface BreadboardVisualizerProps {
   design: CircuitDesign;
@@ -8,8 +10,11 @@ interface BreadboardVisualizerProps {
 
 const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
+  const elapsedRef = useRef(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const mcu = design.components.find(c => c.category === 'MCU');
+  const simulationPlan = useMemo(() => analyzeFirmwareForSimulation(design), [design]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -17,7 +22,11 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const drawBreadboard = () => {
+    let animationFrame = 0;
+    let previousFrameTime = 0;
+    let lastTimeUpdate = 0;
+
+    const drawBreadboard = (timeMs: number) => {
       const width = canvas.parentElement?.clientWidth || 900;
       const height = 580;
       const dpr = window.devicePixelRatio || 1;
@@ -26,7 +35,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // Dark background
-      ctx.fillStyle = '#f4f6f8';
+      ctx.fillStyle = '#e9eff3';
       ctx.fillRect(0, 0, width, height);
 
       // Breadboard dimensions
@@ -36,16 +45,27 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       const startY = 40;
 
       // Breadboard white/cream plastic body
-      ctx.fillStyle = '#f8fafc';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-      ctx.shadowBlur = 20;
+      const ledStates = getLedStatesAt(simulationPlan, timeMs);
+      ctx.fillStyle = '#f9fbfc';
+      ctx.shadowColor = 'rgba(22, 38, 51, 0.2)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetY = 8;
       ctx.beginPath();
       ctx.roundRect(startX, startY, boardWidth, boardHeight, 14);
       ctx.fill();
       ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
 
-      ctx.strokeStyle = '#cbd5e1';
+      ctx.strokeStyle = '#c3cfd7';
       ctx.lineWidth = 1.5;
+      ctx.stroke();
+      const boardEdge = ctx.createLinearGradient(0, startY, 0, startY + boardHeight);
+      boardEdge.addColorStop(0, 'rgba(255,255,255,.82)');
+      boardEdge.addColorStop(1, 'rgba(101,123,137,.12)');
+      ctx.strokeStyle = boardEdge;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(startX + 2, startY + 2, boardWidth - 4, boardHeight - 4, 12);
       ctx.stroke();
 
       // Top & Bottom Power Rails (+ Red, - Blue Lines)
@@ -78,7 +98,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
 
       // Center Divider Trench
       const trenchY = startY + boardHeight / 2;
-      ctx.fillStyle = '#e2e8f0';
+      ctx.fillStyle = '#d7e0e5';
       ctx.fillRect(startX + 20, trenchY - 8, boardWidth - 40, 16);
       ctx.strokeStyle = '#94a3b8';
       ctx.lineWidth = 1;
@@ -87,7 +107,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       // Breadboard Pin Holes (Tie points)
       const numCols = 30;
       const colSpacing = (boardWidth - 80) / numCols;
-      ctx.fillStyle = '#17212b';
+      ctx.fillStyle = '#253441';
 
       // Top power holes
       for (let c = 0; c < numCols; c++) {
@@ -132,23 +152,47 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       const mcuWidth = 140;
       const mcuHeight = 90;
 
-      ctx.fillStyle = '#17212b';
-      ctx.strokeStyle = '#00f0ff';
+      ctx.fillStyle = '#176848';
+      ctx.strokeStyle = '#3a9c77';
       ctx.lineWidth = 2;
-      ctx.shadowColor = 'rgba(0, 240, 255, 0.3)';
+      ctx.shadowColor = 'rgba(20, 64, 49, 0.28)';
       ctx.shadowBlur = 12;
+      ctx.shadowOffsetY = 5;
       ctx.beginPath();
       ctx.roundRect(mcuX, mcuY, mcuWidth, mcuHeight, 6);
       ctx.fill();
       ctx.stroke();
       ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      const chipGradient = ctx.createLinearGradient(mcuX + 35, mcuY + 8, mcuX + 110, mcuY + 52);
+      chipGradient.addColorStop(0, '#24333e');
+      chipGradient.addColorStop(1, '#101820');
+      ctx.fillStyle = chipGradient;
+      ctx.strokeStyle = '#72818b';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(mcuX + 38, mcuY + 8, 64, 44, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#b6c4ca';
+      for (let pin = 0; pin < 8; pin += 1) {
+        const px = mcuX + 42 + pin * 8;
+        ctx.fillRect(px, mcuY + 2, 4, 6);
+        ctx.fillRect(px, mcuY + 52, 4, 7);
+      }
+      ctx.fillStyle = '#f4d477';
+      ctx.font = 'bold 7px JetBrains Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('MCU', mcuX + 70, mcuY + 33);
+      ctx.textAlign = 'left';
 
       // MCU Chip Label
-      ctx.fillStyle = '#8ee5e9';
+      ctx.fillStyle = '#f2faf6';
       ctx.font = 'bold 11px Inter, sans-serif';
       ctx.fillText(mcu?.name || 'ESP32 / MCU', mcuX + mcuWidth / 2, mcuY + 36);
 
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillStyle = '#cae0d5';
       ctx.font = '9px Inter, sans-serif';
       ctx.fillText('MCU Dev Board', mcuX + mcuWidth / 2, mcuY + 52);
 
@@ -159,7 +203,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       // Place every modeled component, including regulators and passives.
       const primaryModules = design.components.filter(c => c.id !== mcu?.id);
 
-      const compPositions: { id: string; name: string; x: number; y: number; w: number; h: number; isOled: boolean; isSensor: boolean }[] = [];
+      const compPositions: { id: string; name: string; x: number; y: number; w: number; h: number; isOled: boolean; isSensor: boolean; isLed: boolean }[] = [];
 
       // Compute slot spacing based on number of primary modules
       const availableWidth = Math.max(boardWidth - (mcuWidth + 120), 140);
@@ -170,23 +214,29 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
         const isPower = comp.category === 'Power';
         const isOled = comp.name.toLowerCase().includes('oled') || comp.name.toLowerCase().includes('ssd1306');
         const isSensor = comp.category === 'Sensor' || comp.name.toLowerCase().includes('bme280') || comp.name.toLowerCase().includes('mpu');
+        const isLed = /\b(?:led|diode)\b/i.test(comp.name);
         
-        const pw = isPassive ? 88 : isOled ? 130 : 108;
-        const ph = isPassive ? 54 : isOled ? 95 : 75;
+        const pw = isPassive ? 88 : isOled ? 130 : isLed ? 88 : 108;
+        const ph = isPassive ? 54 : isOled ? 95 : isLed ? 68 : 75;
         const columns = Math.max(1, Math.floor(availableWidth / 150));
         const px = startX + 235 + (idx % columns) * Math.min(150, modSpacing);
         const py = startY + 95 + Math.floor(idx / columns) * 105;
 
-        compPositions.push({ id: comp.id, name: comp.name, x: px, y: py, w: pw, h: ph, isOled, isSensor });
+        compPositions.push({ id: comp.id, name: comp.name, x: px, y: py, w: pw, h: ph, isOled, isSensor, isLed });
 
         // Module PCB background
-        ctx.fillStyle = isPassive ? '#fff7dc' : isPower ? '#e6f4ef' : isOled ? '#12323a' : '#176d58';
-        ctx.strokeStyle = isPassive ? '#d09a2d' : isPower ? '#22836b' : isOled ? '#53c6d0' : '#31a77c';
+        ctx.fillStyle = isPassive ? '#f5ead0' : isPower ? '#e4f2e9' : isOled ? '#12323a' : isLed ? '#f2f5f7' : '#176d58';
+        ctx.strokeStyle = isPassive ? '#c39a52' : isPower ? '#5d9b7a' : isOled ? '#53c6d0' : isLed ? '#bdcbd3' : '#31a77c';
         ctx.lineWidth = 1.5;
+        ctx.shadowColor = 'rgba(21, 41, 52, .16)';
+        ctx.shadowBlur = 7;
+        ctx.shadowOffsetY = 3;
         ctx.beginPath();
         ctx.roundRect(px, py, pw, ph, 6);
         ctx.fill();
         ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
 
         // OLED Visual Screen Mockup
         if (isPassive) {
@@ -206,13 +256,54 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
           ctx.font = 'bold 8px JetBrains Mono, monospace';
           ctx.fillText('AUTO-CIRCUIT', px + pw / 2, py + 24);
           ctx.font = '7px JetBrains Mono, monospace';
-          ctx.fillStyle = '#00ff88';
-          ctx.fillText('T:24.8C H:52%', px + pw / 2, py + 36);
-          ctx.fillText('1013 hPa', px + pw / 2, py + 46);
+          ctx.fillStyle = '#b5c8ca';
+          ctx.fillText('SENSOR DATA', px + pw / 2, py + 36);
+          ctx.fillText('NOT SIMULATED', px + pw / 2, py + 46);
+        } else if (isLed) {
+          const lit = ledStates.get(comp.id) === true;
+          const ledColor = comp.name.toLowerCase().includes('green') ? '#20b878'
+            : comp.name.toLowerCase().includes('blue') ? '#3488e8'
+              : comp.name.toLowerCase().includes('yellow') ? '#e2ad2f' : '#e64b4b';
+          const centerX = px + pw / 2;
+          const centerY = py + 25;
+          if (lit) {
+            const glow = ctx.createRadialGradient(centerX, centerY, 4, centerX, centerY, 30);
+            glow.addColorStop(0, `${ledColor}99`);
+            glow.addColorStop(1, `${ledColor}00`);
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 30, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = '#9aa8b0';
+          ctx.fillRect(centerX - 2, centerY + 10, 2, 14);
+          ctx.fillRect(centerX + 1, centerY + 10, 2, 14);
+          ctx.fillStyle = lit ? '#fff8e9' : '#dfe5e8';
+          ctx.strokeStyle = lit ? ledColor : '#687985';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 12, Math.PI, 0);
+          ctx.lineTo(centerX + 9, centerY + 8);
+          ctx.lineTo(centerX - 9, centerY + 8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          if (lit) {
+            ctx.fillStyle = ledColor;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY + 2, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = '#253441';
+          ctx.font = 'bold 8px Inter, sans-serif';
+          ctx.fillText(comp.name, centerX, py + 54, pw - 6);
+          ctx.fillStyle = simulationPlan.isSupported ? (lit ? '#14764e' : '#647582') : '#9a6b27';
+          ctx.font = 'bold 7px JetBrains Mono, monospace';
+          ctx.fillText(simulationPlan.isSupported ? (lit ? 'OUTPUT HIGH' : 'OUTPUT LOW') : 'NOT SIMULATED', centerX, py + 63);
         }
 
         // Module Label
-        if (!isPassive) {
+        if (!isPassive && !isLed) {
         ctx.fillStyle = '#f8fafc';
         ctx.font = 'bold 9px Inter, sans-serif';
         ctx.fillText(comp.name, px + pw / 2, py + (isOled ? ph - 16 : 24), pw - 8);
@@ -272,6 +363,7 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
         const targetY = target.y + target.h;
         ctx.strokeStyle = color;
         ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(sourceX, sourceY);
         ctx.bezierCurveTo(sourceX + 35, sourceY + 35 + index * 3, targetX, targetY + 35 + index * 3, targetX, targetY);
@@ -279,6 +371,24 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
         ctx.fillStyle = color;
         ctx.beginPath(); ctx.arc(sourceX, sourceY, 3, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(targetX, targetY, 3, 0, Math.PI * 2); ctx.fill();
+        const pinIsHigh = firmwareDrivesPin(simulationPlan, mapping.mcuPin)
+          && getOutputStateAt(simulationPlan, mapping.mcuPin, timeMs) === true;
+        if (pinIsHigh) {
+          const progress = ((timeMs / simulationPlan.durationMs + index * 0.137) % 1 + 1) % 1;
+          const inverse = 1 - progress;
+          const pulseX = inverse ** 3 * sourceX + 3 * inverse ** 2 * progress * (sourceX + 35)
+            + 3 * inverse * progress ** 2 * targetX + progress ** 3 * targetX;
+          const pulseY = inverse ** 3 * sourceY + 3 * inverse ** 2 * progress * (sourceY + 35 + index * 3)
+            + 3 * inverse * progress ** 2 * (targetY + 35 + index * 3) + progress ** 3 * targetY;
+          ctx.save();
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 12;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(pulseX, pulseY, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       });
       // Bottom Legend
       ctx.fillStyle = '#94a3b8';
@@ -287,18 +397,38 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
       ctx.fillText(`Generated signal mappings: ${signalMappings.length} nets. Check the pin mapping table for power and ground.`, startX + 10, startY + boardHeight + 35);
     };
 
-    const observer = new ResizeObserver(drawBreadboard);
+    const renderFrame = (now: number) => {
+      if (previousFrameTime > 0 && isPlaying && simulationPlan.isSupported) {
+        elapsedRef.current = (elapsedRef.current + now - previousFrameTime) % simulationPlan.durationMs;
+      }
+      previousFrameTime = now;
+      drawBreadboard(elapsedRef.current);
+      if (now - lastTimeUpdate >= 100) {
+        setElapsedMs(elapsedRef.current);
+        lastTimeUpdate = now;
+      }
+      animationFrame = requestAnimationFrame(renderFrame);
+    };
+
+    const observer = new ResizeObserver(() => drawBreadboard(elapsedRef.current));
     if (canvas.parentElement) observer.observe(canvas.parentElement);
-    drawBreadboard();
-    return () => observer.disconnect();
-  }, [design]);
+    animationFrame = requestAnimationFrame(renderFrame);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+    };
+  }, [design, isPlaying, simulationPlan, mcu]);
+
+  const timelineDuration = simulationPlan.isSupported ? simulationPlan.durationMs : 1000;
+  const timelineValue = simulationPlan.isSupported ? elapsedMs % timelineDuration : 0;
+  const formattedTime = `${(timelineValue / 1000).toFixed(2)}s / ${(timelineDuration / 1000).toFixed(2)}s`;
 
   return (
     <div className="breadboard-view-container">
       <div className="breadboard-header">
         <div>
-          <h2>Physical wiring preview</h2>
-          <p>Visual placement preview. Signal wires use the generated pin mapping; verify the hardware pinout before wiring.</p>
+          <h2>Live breadboard · 3D + time</h2>
+          <p>Component glow and signal pulses follow the supported firmware model. This is a visual wiring preview, not an electrical simulation.</p>
         </div>
         <div className="schematic-counts">
           <span className="badge badge-cyan">{design.components.length} Breadboard ICs</span>
@@ -308,6 +438,50 @@ const BreadboardVisualizer: React.FC<BreadboardVisualizerProps> = ({ design }) =
 
       <div className="breadboard-canvas-card">
         <canvas ref={canvasRef} className="breadboard-canvas" />
+      </div>
+      <div className={`breadboard-timeline ${simulationPlan.isSupported ? 'is-supported' : ''}`}>
+        <div className="breadboard-timeline-heading">
+          <span>{simulationPlan.isSupported ? 'LIVE FIRMWARE MODEL' : 'STATIC WIRING PREVIEW'}</span>
+          <strong>{simulationPlan.isSupported ? formattedTime : 'Output not modeled'}</strong>
+          <button
+            type="button"
+            className="breadboard-play-button"
+            disabled={!simulationPlan.isSupported}
+            onClick={() => setIsPlaying(current => !current)}
+          >
+            {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
+          <button
+            type="button"
+            className="breadboard-reset-button"
+            disabled={!simulationPlan.isSupported}
+            aria-label="Reset breadboard simulation"
+            onClick={() => {
+              elapsedRef.current = 0;
+              setElapsedMs(0);
+            }}
+          >
+            <RotateCcw size={15} /> Reset
+          </button>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={timelineDuration}
+          step={10}
+          value={timelineValue}
+          disabled={!simulationPlan.isSupported}
+          aria-label="Scrub the breadboard firmware simulation timeline"
+          onPointerDown={() => setIsPlaying(false)}
+          onChange={event => {
+            const nextTime = Number(event.currentTarget.value);
+            elapsedRef.current = nextTime;
+            setElapsedMs(nextTime);
+            setIsPlaying(false);
+          }}
+        />
+        <small>{simulationPlan.isSupported ? 'Pause and scrub to inspect the modeled LED and signal states over one firmware loop.' : simulationPlan.message}</small>
       </div>
     </div>
   );

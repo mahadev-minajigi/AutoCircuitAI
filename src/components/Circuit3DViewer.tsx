@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Minus, Plus, RotateCcw, RotateCw, Sparkles, Waypoints, Zap } from 'lucide-react';
+import { Activity, Clock3, Minus, Plus, RotateCcw, RotateCw, Sparkles, Waypoints, Zap } from 'lucide-react';
 import type { CircuitDesign, Component, PinMapping } from '../types/circuit';
 import { analyzeFirmwareForSimulation, firmwareDrivesPin, getLedStatesAt, getOutputStateAt } from '../services/firmwareSimulation';
 import './Circuit3DViewer.css';
@@ -457,14 +457,19 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
   const onSelectRef = useRef(onSelectComponent);
   const poweredRef = useRef(true);
   const wiresVisibleRef = useRef(true);
+  const simulationElapsedRef = useRef(0);
   const simulationPlan = useMemo(() => analyzeFirmwareForSimulation(design), [design]);
   const simulationPlanRef = useRef(simulationPlan);
   const [camera, setCamera] = useState({ labels: true, wires: true, powered: true });
+  const [simulationTimeMs, setSimulationTimeMs] = useState(0);
   const [renderError, setRenderError] = useState<string | null>(null);
   const mcu = design.components.find(component => component.category === 'MCU');
 
   useEffect(() => { onSelectRef.current = onSelectComponent; }, [onSelectComponent]);
   useEffect(() => { simulationPlanRef.current = simulationPlan; }, [simulationPlan]);
+  useEffect(() => {
+    simulationElapsedRef.current = 0;
+  }, [design.id]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -617,26 +622,32 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
     renderer.domElement.addEventListener('keydown', handleKeyDown);
 
     let frame = 0;
-    let simulationElapsed = 0;
     let previousFrameTime = 0;
+    let lastHudUpdate = 0;
     const animate = (time: number) => {
       controls.update();
       const activePlan = simulationPlanRef.current;
-      if (previousFrameTime > 0 && poweredRef.current) simulationElapsed += time - previousFrameTime;
+      if (previousFrameTime > 0 && poweredRef.current && activePlan.isSupported) {
+        simulationElapsedRef.current = (simulationElapsedRef.current + time - previousFrameTime) % activePlan.durationMs;
+      }
       previousFrameTime = time;
+      const simulationElapsed = simulationElapsedRef.current;
+      if (time - lastHudUpdate >= 100) {
+        setSimulationTimeMs(simulationElapsed);
+        lastHudUpdate = time;
+      }
       const ledStates = getLedStatesAt(activePlan, simulationElapsed);
       wires.forEach(wire => {
-        const active = poweredRef.current
-          && firmwareDrivesPin(activePlan, wire.mcuPin)
+        const active = firmwareDrivesPin(activePlan, wire.mcuPin)
           && getOutputStateAt(activePlan, wire.mcuPin, simulationElapsed) === true;
         wire.pulse.visible = wiresVisibleRef.current && active;
         if (active) {
           const offset = Number(wire.pulse.userData.offset) || 0;
-          wire.pulse.position.copy(wire.curve.getPoint((time / 1700 + offset) % 1));
+          wire.pulse.position.copy(wire.curve.getPoint((simulationElapsed / activePlan.durationMs + offset) % 1));
         }
       });
       leds.forEach(led => {
-        const lit = poweredRef.current && ledStates.get(led.componentId) === true;
+        const lit = ledStates.get(led.componentId) === true;
         led.lens.material.emissiveIntensity = lit ? 1.8 : 0.04;
         led.lens.material.opacity = lit ? 0.98 : 0.64;
         led.glow.material.opacity = lit ? 0.2 : 0;
@@ -711,7 +722,7 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
       }
     });
     wiresRef.current.forEach(wire => {
-      wire.pulse.visible = camera.wires && camera.powered && firmwareDrivesPin(simulationPlan, wire.mcuPin);
+      wire.pulse.visible = camera.wires && firmwareDrivesPin(simulationPlan, wire.mcuPin);
     });
   }, [camera.labels, camera.powered, camera.wires, simulationPlan]);
 
@@ -757,11 +768,14 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
 
   const componentCount = design.components.length;
   const connectionCount = design.pinMappings.length;
+  const timelineDuration = simulationPlan.isSupported ? simulationPlan.durationMs : 1000;
+  const timelineValue = simulationPlan.isSupported ? simulationTimeMs % timelineDuration : 0;
+  const formattedTime = `${(timelineValue / 1000).toFixed(2)}s / ${(timelineDuration / 1000).toFixed(2)}s`;
 
   return (
     <section className="circuit-3d-viewer" aria-label="Interactive 3D circuit view">
       <header className="circuit-3d-heading">
-        <div><span className="workspace-eyebrow">PROMPT-GENERATED CIRCUIT</span><h2>{design.title}</h2><p>Drag to orbit · Right-drag to pan · Scroll to zoom · Q / E to rotate</p></div>
+        <div><span className="workspace-eyebrow">PROMPT-GENERATED CIRCUIT · 3D + TIME</span><h2>{design.title}</h2><p>Drag to orbit · Right-drag to pan · Scroll to zoom · Scrub the firmware timeline to inspect modeled outputs</p></div>
         <span className="circuit-3d-component-count"><strong>{componentCount}</strong> parts <i /> <strong>{connectionCount}</strong> connections</span>
       </header>
 
@@ -778,6 +792,32 @@ const Circuit3DViewer: React.FC<Circuit3DViewerProps> = ({ design, selectedCompo
           <button className={camera.powered ? 'powered' : ''} onClick={togglePowered} title={camera.powered ? 'Pause visual simulation' : 'Run visual simulation'} aria-label={camera.powered ? 'Pause simulation' : 'Run simulation'}><Zap size={17} /></button>
         </div>
         <div className="circuit-3d-tip" title={simulationPlan.message}><span>3D</span> {camera.powered ? (simulationPlan.isSupported ? 'Firmware outputs · visual model' : 'Firmware not simulated') : 'Visual simulation paused'} · {mcu?.name ?? 'Board not identified'}</div>
+      </div>
+      <div className={`circuit-3d-timeline ${simulationPlan.isSupported ? 'is-supported' : ''}`}>
+        <div className="circuit-3d-timeline-heading">
+          <span><Clock3 size={14} /> TIME VIEW</span>
+          <strong>{simulationPlan.isSupported ? formattedTime : 'Unavailable for this sketch'}</strong>
+          <span className="circuit-3d-timeline-status"><Activity size={13} /> {simulationPlan.isSupported ? 'Firmware visual model' : 'No guessed behavior'}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={timelineDuration}
+          step={10}
+          value={timelineValue}
+          disabled={!simulationPlan.isSupported}
+          aria-label="Scrub the firmware visual simulation timeline"
+          onPointerDown={() => {
+            if (simulationPlan.isSupported) setCamera(current => ({ ...current, powered: false }));
+          }}
+          onChange={event => {
+            const nextTime = Number(event.currentTarget.value);
+            setCamera(current => ({ ...current, powered: false }));
+            simulationElapsedRef.current = nextTime;
+            setSimulationTimeMs(nextTime);
+          }}
+        />
+        <small>{simulationPlan.isSupported ? 'LED states and output pulses follow this modeled loop time. This is a visual preview, not an electrical simulation.' : simulationPlan.message}</small>
       </div>
       <footer className="circuit-3d-legend">
         {Object.entries(protocolColors).map(([protocol, color]) => (

@@ -1,7 +1,6 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import PromptStudio from './components/PromptStudio';
-import SchematicViewer from './components/SchematicViewer';
 import PinoutTable from './components/PinoutTable';
 import BomTable from './components/BomTable';
 import PcbViewer from './components/PcbViewer';
@@ -15,6 +14,8 @@ import { Cpu, List, CircuitBoard, LayoutDashboard, ShieldCheck, BookOpen, Layers
 import { generateCircuit } from './services/aiCircuitEngine';
 import type { CircuitDesign } from './types/circuit';
 
+const Circuit3DViewer = lazy(() => import('./components/Circuit3DViewer'));
+
 type TabId = 'schematic' | 'breadboard' | 'lab' | 'pinout' | 'bom' | 'pcb' | 'drc';
 
 const workflowSteps = ['Prompt', 'Analysis', 'Components', 'Circuit', 'Pin mapping', 'Validation', 'BOM', 'Firmware', 'PCB'];
@@ -27,6 +28,7 @@ function App() {
   const [generatingStep, setGeneratingStep] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [selected3DComponentId, setSelected3DComponentId] = useState<string | null>(null);
 
   const showToast = useCallback((message: string, type: ToastMessage['type'] = 'info') => {
     const id = Math.random().toString(36).substring(7);
@@ -71,6 +73,7 @@ function App() {
       try {
         const result = await generateCircuit(prompt, preset);
         setDesign(result);
+        setSelected3DComponentId(null);
         setHistory(prev => [...prev, { design: result, prompt, timestamp: Date.now() }]);
         setActiveTab('schematic');
         const usedLocalFallback = result.warnings.some(warning => /local template fallback/i.test(warning));
@@ -89,6 +92,7 @@ function App() {
 
   const handleHistorySelect = (entry: HistoryEntry) => {
     setDesign(entry.design);
+    setSelected3DComponentId(null);
     setActiveTab('schematic');
     showToast(`Loaded: ${entry.design.title}`, 'info');
   };
@@ -212,7 +216,15 @@ function App() {
               </div>
 
               <div className="tab-content">
-                {activeTab === 'schematic' && <SchematicViewer design={design} />}
+                {activeTab === 'schematic' && (
+                  <Suspense fallback={<div className="circuit-3d-loading" role="status">Loading interactive 3D circuit...</div>}>
+                    <Circuit3DViewer
+                      design={design}
+                      selectedComponentId={selected3DComponentId}
+                      onSelectComponent={setSelected3DComponentId}
+                    />
+                  </Suspense>
+                )}
                 {activeTab === 'breadboard' && <BreadboardVisualizer design={design} onShowToast={showToast} />}
                 {activeTab === 'lab' && <LabGuideView design={design} onShowToast={showToast} />}
                 {activeTab === 'drc' && <DrcReport design={design} />}
@@ -230,7 +242,7 @@ function App() {
               <p>Enter a natural language prompt or pick a Quick Start preset to generate your first hardware design.</p>
               <div className="empty-feature-grid">
                 {[
-                  { icon: '🔌', title: 'Interactive Schematic', desc: 'React Flow diagram with zoom, pan, fullscreen' },
+                  { icon: '🧩', title: 'Live 3D Circuit', desc: 'Explore realistic components and supported firmware outputs' },
                   { icon: '📋', title: 'Pin Mapping Table', desc: 'MCU-to-component connection guide' },
                   { icon: '✅', title: 'DRC Validation', desc: 'Rule-based electrical checks' },
                   { icon: '💰', title: 'BOM in INR', desc: 'Estimated parts cost breakdown' },

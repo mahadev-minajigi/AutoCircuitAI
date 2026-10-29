@@ -386,7 +386,7 @@ void loop() {
     warnings: [
       'This is a bare ATmega328P circuit: provide a regulated 5V supply, program the chip using an ISP programmer or a preloaded bootloader, and configure fuses for the 16MHz crystal.',
       'The 16MHz crystal and its load capacitors must match the crystal datasheet. Confirm the MCU package pinout before wiring.',
-      'The output monitor cannot model button input, conditionals, or millis()-based timing, so it will not show a firmware-derived waveform for this sketch.',
+      'The live breadboard and 3D timelines cannot model button input, conditionals, or millis()-based timing, so this sketch is shown without a guessed live output.',
     ],
   };
   design.drcReport = runDRC(design);

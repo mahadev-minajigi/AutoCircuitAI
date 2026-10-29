@@ -31,14 +31,14 @@ flowchart LR
 - Natural-language design prompt with a Quick Start weather-station preset
 - Shared design model used by every result view
 - Interactive schematic with visible power, ground, I2C, SPI, and other signal nets
-- Fullscreen schematic mode with zoom, pan, and automatic recentering
+- Interactive Three.js 3D + time circuit view with orbit, pan, zoom, component selection, and a scrub-able playback timeline for supported firmware outputs
 - MCU-to-component pin mapping table
 - Rule-based DRC checks for MCU selection, voltage compatibility, current demand, and I2C notes
 - BOM with estimated costs displayed in Indian rupees (INR)
 - CSV, JSON, and firmware export from the header
 - Starter firmware examples for supported templates
 - Advisory prompt-coverage warnings for explicitly requested boards, named parts, interfaces, pins, and selected firmware behaviors not evident in the generated design
-- A limited firmware-driven visual model for straight-line `digitalWrite(HIGH/LOW)` and `delay()` calls in `loop()`, with mapped LED and GPIO state reflected in the schematic, 3D view, and output monitor
+- A limited firmware-driven visual model for straight-line `digitalWrite(HIGH/LOW)` and `delay()` calls in `loop()`, with mapped LED and GPIO state reflected in the 3D circuit and breadboard timeline; playback/scrubbing does not claim to be an electrical simulation
 - Design-specific conceptual PCB placement preview
 - Responsive layout with page scrolling and mobile stacking
 
@@ -93,7 +93,7 @@ Typed custom prompts use the configured Gemini service before keyword-based loca
 - ATmega328P LED-and-button prompts use a standalone 5V DIP circuit with a crystal, reset pull-up, button input, and current-limited LED output.
 - Arduino Uno motor prompts use the motor-controller template.
 
-The IDE uses the returned design as its single source for the circuit visualization, component list, pin mapping, DRC results, and firmware editor. If a prompt does not match a supported template and Gemini is unavailable, the app marks the chosen template as a starting point instead of presenting it as a prompt-matched circuit. The firmware output monitor explains when it cannot produce a firmware-derived waveform; it is not a circuit-generation failure. Always verify a generated design before building hardware.
+The IDE uses the returned design as its single source for the circuit visualization, component list, pin mapping, DRC results, and firmware editor. If a prompt does not match a supported template and Gemini is unavailable, the app marks the chosen template as a starting point instead of presenting it as a prompt-matched circuit. Unsupported firmware is labeled as not simulated in the 3D and breadboard previews rather than presenting guessed activity. Always verify a generated design before building hardware.
 
 ## Project Structure
 
@@ -102,6 +102,7 @@ src/
 ├── App.tsx                         Main workflow and tab navigation
 ├── components/
 │   ├── PromptStudio.tsx             Prompt input and Quick Start
+│   ├── Circuit3DViewer.tsx          Interactive 3D circuit and live output preview
 │   ├── SchematicViewer.tsx          React Flow circuit diagram
 │   ├── PinoutTable.tsx              MCU-to-component mappings
 │   ├── DrcReport.tsx                Rule-based electrical checks
@@ -165,7 +166,7 @@ The production build runs TypeScript project checks followed by the Vite product
 
 - The current generator uses local templates and keyword routing; it is not yet a general-purpose AI circuit synthesizer.
 - DRC is rule-based and intentionally limited to prototype-level checks.
-- The visual firmware model is not a C++ interpreter or electrical simulator. It only models straight-line `digitalWrite(HIGH/LOW)` and literal `delay(milliseconds)` statements in `loop()`; conditionals, input state, PWM, sensor behavior, and other firmware are reported as not simulated rather than guessed.
+- The visual firmware model is not a C++ interpreter or electrical simulator. It only models straight-line `digitalWrite(HIGH/LOW)` and literal `delay(milliseconds)` statements in `loop()`; conditionals, input state, PWM, sensor behavior, and other firmware are reported as not simulated rather than guessed. The unsupported waveform panel has been removed; supported output playback is shown on the 3D circuit and breadboard timelines.
 - The PCB view is a conceptual placement preview, not a real netlist, autorouter, Gerber generator, or manufacturing layout.
 - Component prices are illustrative INR estimates, not live distributor prices.
 - Pin mappings should be checked against the target board, module datasheet, voltage requirements, pull-ups, decoupling, and current limits before building hardware.
