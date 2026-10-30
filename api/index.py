@@ -1176,29 +1176,29 @@ def ensure_design_support_parts(design: CircuitDesign) -> None:
 
 def make_button_led_design(prompt: str) -> CircuitDesign:
     components = [
-        Component(id="u1", name="Arduino Uno R3", description="5V microcontroller board with digital pins D7 and D13.", category="MCU", package="Dev board", estimatedCost=600, pins=["5V", "GND", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "A0", "A1", "A2", "A3", "A4", "A5"], operatingVoltage=5, maxCurrent_mA=50),
+        Component(id="u1", name="Arduino Uno R3", description="5V microcontroller board using D7 for the button and D8 for the external LED.", category="MCU", package="Dev board", estimatedCost=600, pins=["5V", "GND", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "A0", "A1", "A2", "A3", "A4", "A5"], operatingVoltage=5, maxCurrent_mA=50),
         Component(id="sw1", name="4-pin tactile pushbutton", description="Momentary normally-open switch. Pins 1/2 form one side; pins 3/4 form the opposite side. Place across the breadboard trench.", category="Actuator", package="Through-hole tactile switch", estimatedCost=10, pins=["1", "2", "3", "4"], operatingVoltage=5, maxCurrent_mA=1),
         Component(id="r_pd", name="10kΩ button pull-down resistor", description="Holds D7 LOW while released; connects the button output node to GND.", category="Passive", package="Axial resistor", estimatedCost=2, pins=["1", "2"], operatingVoltage=5, maxCurrent_mA=0.5),
-        Component(id="d1", name="Indicator LED", description="Anode connects to D13 through a 220Ω series resistor; cathode connects to GND.", category="Actuator", package="5mm LED", estimatedCost=3, pins=["ANODE", "CATHODE"], operatingVoltage=2, maxCurrent_mA=10),
-        Component(id="r_led", name="220Ω LED current-limiting resistor", description="Series resistor from Arduino D13 to LED anode.", category="Passive", package="Axial resistor", estimatedCost=2, pins=["1", "2"], operatingVoltage=5, maxCurrent_mA=10),
+        Component(id="d1", name="Indicator LED", description="Anode connects to D8 through a 220Ω series resistor; cathode connects to GND.", category="Actuator", package="5mm LED", estimatedCost=3, pins=["ANODE", "CATHODE"], operatingVoltage=2, maxCurrent_mA=10),
+        Component(id="r_led", name="220Ω LED current-limiting resistor", description="Series resistor from Arduino D8 to LED anode.", category="Passive", package="Axial resistor", estimatedCost=2, pins=["1", "2"], operatingVoltage=5, maxCurrent_mA=10),
     ]
     mappings = [
         PinMapping(mcuPin="5V", componentId="sw1", componentPin="1", protocol="Power", description="Switch supply side; button pins 1/2 are internally common."),
         PinMapping(mcuPin="D7", componentId="sw1", componentPin="3", protocol="GPIO", description="Button output side; pins 3/4 are internally common."),
         PinMapping(mcuPin="D7", componentId="r_pd", componentPin="1", protocol="GPIO", description="Pull-down connects to the same D7/button output node."),
         PinMapping(mcuPin="GND", componentId="r_pd", componentPin="2", protocol="GND", description="10kΩ pull-down returns to ground."),
-        PinMapping(mcuPin="D13", componentId="r_led", componentPin="1", protocol="GPIO", description="D13 drives LED through the series resistor."),
-        PinMapping(mcuPin="D13", sourceComponentId="r_led", sourceComponentPin="2", componentId="d1", componentPin="ANODE", protocol="GPIO", description="LED anode connects to resistor terminal 2; terminal 1 connects to Arduino D13."),
+        PinMapping(mcuPin="D8", componentId="r_led", componentPin="1", protocol="GPIO", description="D8 drives the external LED through its series resistor."),
+        PinMapping(mcuPin="D8", sourceComponentId="r_led", sourceComponentPin="2", componentId="d1", componentPin="ANODE", protocol="GPIO", description="LED anode connects to resistor terminal 2; terminal 1 connects to Arduino D8."),
         PinMapping(mcuPin="GND", componentId="d1", componentPin="CATHODE", protocol="GND", description="LED cathode returns to GND for active-HIGH operation."),
     ]
     design = CircuitDesign(
         id=f"button-led-{uuid.uuid4().hex[:8]}",
         title="Arduino Uno Pushbutton LED",
-        description=f"Press a pushbutton to light an LED. D7 reads the button through a 10kΩ pull-down; D13 drives the LED through a 220Ω current-limiting resistor. Requested project: {prompt}",
+        description=f"Press a pushbutton to light an LED. D7 reads the button through a 10kΩ pull-down; D8 drives the external LED through a 220Ω current-limiting resistor. Requested project: {prompt}",
         components=components,
         pinMappings=mappings,
         firmwareCode="""const int buttonPin = 7;
-const int ledPin = 13;
+const int ledPin = 8;
 
 void setup() {
   pinMode(buttonPin, INPUT);  // External 10kΩ pull-down to GND
@@ -1210,7 +1210,66 @@ void loop() {
   const bool pressed = digitalRead(buttonPin) == HIGH;
   digitalWrite(ledPin, pressed ? HIGH : LOW);
 }""",
-        warnings=["External 10kΩ pull-down is required with INPUT mode. Identify the switch's internally connected pin pairs and place it across the breadboard trench."],
+        warnings=["Use D8 for the external LED with its own 220Ω series resistor. External 10kΩ pull-down is required with INPUT mode. Identify the switch's internally connected pin pairs and place it across the breadboard trench."],
+    )
+    design.drcReport = run_drc(design)
+    return design
+
+def make_arduino_motor_speed_design(prompt: str) -> CircuitDesign:
+    components = [
+        Component(id="u1", name="Arduino Uno R3", description="5V controller; D9 provides PWM, D7/D8 set direction, and A0 reads the speed potentiometer.", category="MCU", package="Dev board", estimatedCost=600, pins=["5V", "GND", "D7", "D8", "D9", "A0"], operatingVoltage=5, maxCurrent_mA=50),
+        Component(id="drv1", name="L298N Dual H-Bridge Module", description="Motor driver logic uses 5V; VS is the separate motor supply. Remove the ENA jumper to control speed with PWM. Check the module for onboard clamp diodes and a sense resistor.", category="Actuator", package="Module", estimatedCost=250, pins=["VSS", "VS", "GND", "ENA", "IN1", "IN2", "OUT1", "OUT2"], operatingVoltage=5, maxCurrent_mA=20),
+        Component(id="motor1", name="Brushed DC Motor", description="Connect to the H-bridge outputs. Motor voltage and stall current must remain within the supply and driver ratings.", category="Actuator", package="Motor", estimatedCost=180, pins=["M+", "M-"], operatingVoltage=12, maxCurrent_mA=1000),
+        Component(id="pot1", name="10kΩ Speed Potentiometer", description="Connect the two outer terminals to Arduino 5V and GND; connect the wiper to A0.", category="Passive", package="Panel potentiometer", estimatedCost=20, pins=["5V", "GND", "WIPER"], operatingVoltage=5, maxCurrent_mA=1),
+        Component(id="batt1", name="Separate Motor Supply", description="Use a supply matched to the motor voltage and stall current; its negative terminal joins the common ground.", category="Power", package="External supply", estimatedCost=500, pins=["+", "GND"], operatingVoltage=12, maxCurrent_mA=2000),
+        Component(id="f1", name="Inline Motor-Supply Fuse", description="Place in series with the positive motor-supply lead. Select from motor stall current, wiring, and driver ratings.", category="Power", package="Fuse holder", estimatedCost=25, pins=["IN", "OUT"], operatingVoltage=12, maxCurrent_mA=0),
+        Component(id="c1", name="470µF Motor-Rail Capacitor", description="Connect across the driver motor supply and common ground near the module; observe polarity and voltage rating.", category="Passive", package="Electrolytic capacitor", estimatedCost=15, pins=["+", "-"], operatingVoltage=25, maxCurrent_mA=0),
+    ]
+    mappings = [
+        PinMapping(mcuPin="D9", componentId="drv1", componentPin="ENA", protocol="PWM", description="PWM speed control; remove the ENA jumper first."),
+        PinMapping(mcuPin="D7", componentId="drv1", componentPin="IN1", protocol="GPIO", description="H-bridge direction input 1."),
+        PinMapping(mcuPin="D8", componentId="drv1", componentPin="IN2", protocol="GPIO", description="H-bridge direction input 2."),
+        PinMapping(mcuPin="A0", componentId="pot1", componentPin="WIPER", protocol="ADC", description="Potentiometer wiper supplies the speed setpoint."),
+        PinMapping(mcuPin="5V", componentId="pot1", componentPin="5V", protocol="Power", description="Potentiometer reference supply."),
+        PinMapping(mcuPin="GND", componentId="pot1", componentPin="GND", protocol="GND", description="Potentiometer ground."),
+        PinMapping(mcuPin="5V", componentId="drv1", componentPin="VSS", protocol="Power", description="Arduino 5V powers the L298N logic input."),
+        PinMapping(mcuPin="+", sourceComponentId="batt1", sourceComponentPin="+", componentId="f1", componentPin="IN", protocol="Power", description="Separate motor-supply positive passes through the inline fuse."),
+        PinMapping(mcuPin="OUT", sourceComponentId="f1", sourceComponentPin="OUT", componentId="drv1", componentPin="VS", protocol="Power", description="Fused motor supply connects to L298N VS."),
+        PinMapping(mcuPin="GND", componentId="drv1", componentPin="GND", protocol="GND", description="Common ground; join Arduino and motor-supply negatives."),
+        PinMapping(mcuPin="OUT1", sourceComponentId="drv1", sourceComponentPin="OUT1", componentId="motor1", componentPin="M+", protocol="Power", description="H-bridge output 1 to motor terminal 1."),
+        PinMapping(mcuPin="OUT2", sourceComponentId="drv1", sourceComponentPin="OUT2", componentId="motor1", componentPin="M-", protocol="Power", description="H-bridge output 2 to motor terminal 2."),
+        PinMapping(mcuPin="VS", sourceComponentId="drv1", sourceComponentPin="VS", componentId="c1", componentPin="+", protocol="Power", description="Bulk capacitor positive across the motor rail."),
+        PinMapping(mcuPin="GND", sourceComponentId="drv1", sourceComponentPin="GND", componentId="c1", componentPin="-", protocol="GND", description="Bulk capacitor negative to common ground."),
+    ]
+    design = CircuitDesign(
+        id=f"arduino-motor-speed-{uuid.uuid4().hex[:8]}",
+        title="Arduino Uno PWM Motor Speed Controller",
+        description=f"A potentiometer sets motor speed with PWM on D9; D7/D8 set direction through an L298N H-bridge. The motor uses a separate fused supply with common ground. Requested project: {prompt}",
+        components=components,
+        pinMappings=mappings,
+        firmwareCode="""const int speedPin = A0;
+const int enablePin = 9;  // Remove ENA jumper
+const int in1Pin = 7;
+const int in2Pin = 8;
+
+void setup() {
+  pinMode(enablePin, OUTPUT);
+  pinMode(in1Pin, OUTPUT);
+  pinMode(in2Pin, OUTPUT);
+  digitalWrite(in1Pin, HIGH);
+  digitalWrite(in2Pin, LOW);
+}
+
+void loop() {
+  const int setpoint = analogRead(speedPin);
+  const int pwm = map(setpoint, 0, 1023, 0, 255);
+  analogWrite(enablePin, pwm);
+}""",
+        warnings=[
+            "Use a separate motor supply and connect its ground to Arduino and driver ground; do not power the motor from an Arduino GPIO.",
+            "Remove the L298N ENA jumper for D9 PWM control. Verify the module's onboard clamp diodes before adding any external diodes.",
+            "Check motor stall current, driver thermal/current ratings, supply voltage, fuse sizing, and capacitor polarity before powering the circuit.",
+        ],
     )
     design.drcReport = run_drc(design)
     return design
@@ -1221,14 +1280,14 @@ def make_blink_led_design(prompt: str) -> CircuitDesign:
     design = CircuitDesign(
         id=f"arduino-blink-{uuid.uuid4().hex[:8]}",
         title="Arduino Uno Blinking LED",
-        description=f"Blink an LED from Arduino Uno digital pin 13 through a 220Ω current-limiting resistor. Requested project: {prompt}",
+        description=f"Blink an external LED from Arduino Uno digital pin 8 through a 220Ω current-limiting resistor. Requested project: {prompt}",
         components=[component for component in button_design.components if component.id in included_ids],
         pinMappings=[
             mapping for mapping in button_design.pinMappings
             if mapping.componentId in included_ids
             and (not mapping.sourceComponentId or mapping.sourceComponentId in included_ids)
         ],
-        firmwareCode="""const int ledPin = 13;
+        firmwareCode="""        const int ledPin = 8;
 
 void setup() {
   pinMode(ledPin, OUTPUT);
@@ -1240,7 +1299,7 @@ void loop() {
   digitalWrite(ledPin, LOW);
   delay(1000);
 }""",
-        warnings=["Use the 220Ω series resistor between D13 and the LED anode."],
+        warnings=["Use D8 for the external LED with its own 220Ω series resistor."],
     )
     design.drcReport = run_drc(design)
     return design
@@ -1510,6 +1569,13 @@ def generate_circuit_endpoint(req: GenerateRequest):
         design = make_atmega_button_blink_design(req.prompt)
         design.warnings = []
         return design
+
+    if (
+        re.search(r"\b(?:arduino\s*)?uno\b|\barduino\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\bmotor\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\b(?:speed|controller|control)\b", req.prompt, re.IGNORECASE)
+    ):
+        return make_arduino_motor_speed_design(req.prompt)
 
     # 2. If Gemini API key is present, try LLM synthesis
     api_key = os.getenv("GEMINI_API_KEY")

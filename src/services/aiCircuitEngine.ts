@@ -294,10 +294,10 @@ function makeBlinkLedDesign(prompt: string): CircuitDesign {
     ...buttonLedTemplate,
     id: `arduino-blink-${Math.random().toString(36).slice(2, 9)}`,
     title: 'Arduino Uno Blinking LED',
-    description: `Blink an LED from Arduino Uno digital pin 13 through a 220Ω current-limiting resistor. Requested project: ${prompt}`,
+    description: `Blink an external LED from Arduino Uno digital pin 8 through a 220Ω current-limiting resistor. Requested project: ${prompt}`,
     components,
     pinMappings,
-    firmwareCode: `const int ledPin = 13;
+    firmwareCode: `    const int ledPin = 8;
 
 void setup() {
   pinMode(ledPin, OUTPUT);
@@ -309,7 +309,7 @@ void loop() {
   digitalWrite(ledPin, LOW);
   delay(1000);
 }`,
-    warnings: ['Use the 220Ω series resistor between D13 and the LED anode.'],
+    warnings: ['Use D8 for the external LED with its own 220Ω series resistor.'],
   };
   design.drcReport = runDRC(design);
   return design;
