@@ -1545,8 +1545,8 @@ def generate_circuit_endpoint(req: GenerateRequest):
         return design
 
     if (
-        re.search(r"\b(?:stm32|blackpill)\b", req.prompt, re.IGNORECASE)
-        and re.search(r"\b(?:drone|flight\s+controller|quadcopter|quadrotor)\b", req.prompt, re.IGNORECASE)
+        re.search(r"\b(?:stm32\w*|blackpill)\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\b(?:drone|flight[\s-]+controller|quadcopter|quadrotor)\b", req.prompt, re.IGNORECASE)
         and re.search(r"\bmpu\s*6000\b", req.prompt, re.IGNORECASE)
         and re.search(r"\bspi\b", req.prompt, re.IGNORECASE)
     ):
@@ -1565,9 +1565,26 @@ def generate_circuit_endpoint(req: GenerateRequest):
         design.drcReport = run_drc(design)
         return design
 
-    if re.search(r"\batmega\s*328(?:p)?\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:button|switch)\b", req.prompt, re.IGNORECASE):
+    if re.search(r"\batmega\s*328(?:p)?\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:push[\s-]?button|button|switch)\b", req.prompt, re.IGNORECASE):
         design = make_atmega_button_blink_design(req.prompt)
         design.warnings = []
+        return design
+
+    if re.search(r"\b(?:rp2040|raspberry\s*pi\s*pico|pico)\b", req.prompt, re.IGNORECASE) and re.search(r"\bmidi\b", req.prompt, re.IGNORECASE):
+        design = CircuitDesign(**TEMPLATES["rpi-pico-synth"])
+        design.id = f"rpi-pico-midi-{uuid.uuid4().hex[:8]}"
+        design.drcReport = run_drc(design)
+        return design
+
+    if (
+        re.search(r"\besp[\s-]?32\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\bbme\s*280\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\b(?:ssd\s*1306|oled)\b", req.prompt, re.IGNORECASE)
+        and re.search(r"\bi2c\b", req.prompt, re.IGNORECASE)
+    ):
+        design = CircuitDesign(**TEMPLATES["esp32-weather"])
+        design.id = f"esp32-weather-{uuid.uuid4().hex[:8]}"
+        design.drcReport = run_drc(design)
         return design
 
     if (
@@ -1577,6 +1594,16 @@ def generate_circuit_endpoint(req: GenerateRequest):
     ):
         return make_arduino_motor_speed_design(req.prompt)
 
+    if re.search(r"\b(?:push[\s-]?button|button)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:blink(?:s|ing)?|led)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
+        design = make_button_led_design(req.prompt)
+        design.warnings = []
+        return design
+
+    if re.search(r"\b(?:blink(?:s|ing)?|flash(?:es|ing)?)\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
+        design = make_blink_led_design(req.prompt)
+        design.warnings = []
+        return design
+
     # 2. If Gemini API key is present, try LLM synthesis
     api_key = os.getenv("GEMINI_API_KEY")
     if api_key and api_key != "your_gemini_api_key_here":
@@ -1585,15 +1612,6 @@ def generate_circuit_endpoint(req: GenerateRequest):
             return design
         except Exception:
             print("Remote generation did not produce output; continuing with local circuit selection.")
-
-    if re.search(r"\b(?:push[ -]?button|button)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:blink|led)\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
-        design = make_button_led_design(req.prompt)
-        design.warnings = []
-        return design
-    if re.search(r"\b(?:blink|flash)\b", req.prompt, re.IGNORECASE) and re.search(r"\bled\b", req.prompt, re.IGNORECASE) and re.search(r"\b(?:uno|arduino)\b", req.prompt, re.IGNORECASE):
-        design = make_blink_led_design(req.prompt)
-        design.warnings = []
-        return design
 
     # 3. Intelligent fallback synthesis based on keywords
     prompt_lower = req.prompt.lower()

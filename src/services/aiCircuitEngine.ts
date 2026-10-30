@@ -418,7 +418,7 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
     return design;
   }
 
-  if (!preset && /\batmega\s*328(?:p)?\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:button|switch)\b/i.test(prompt)) {
+  if (!preset && /\batmega\s*328(?:p)?\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:push[\s-]?button|button|switch)\b/i.test(prompt)) {
     const design = makeAtmegaButtonBlinkDesign(prompt);
     design.warnings = [];
     return design;
@@ -439,7 +439,7 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
     design.drcReport = runDRC(design);
     return design;
   }
-  if (!preset && /\b(?:blink|flash)\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt) && !/\bbutton\b/i.test(prompt)) {
+  if (!preset && /\b(?:blink(?:s|ing)?|flash(?:es|ing)?)\b/i.test(prompt) && /\bled\b/i.test(prompt) && /\b(?:uno|arduino)\b/i.test(prompt) && !/\bbutton\b/i.test(prompt)) {
     const design = makeBlinkLedDesign(prompt);
     design.warnings = [];
     return design;
@@ -451,7 +451,7 @@ export function generateCircuitLocal(prompt: string, preset?: string): CircuitDe
   }
 
   let baseTemplate = templates['esp32-weather'];
-  const asksForFlightController = /\b(?:drone|flight controller|quadcopter|quadrotor|esc|brushless motor)\b|(?:motor.{0,20}pwm|pwm.{0,20}motor)/i.test(prompt);
+  const asksForFlightController = /\b(?:drone|flight[\s-]+controller|quadcopter|quadrotor|esc|brushless motor)\b|(?:motor.{0,20}pwm|pwm.{0,20}motor)/i.test(prompt);
   if (asksForFlightController && /\b(?:stm32|mpu\s*6000|flight controller|drone|quadcopter|quadrotor)\b/i.test(prompt)) {
     baseTemplate = templates['stm32-drone'];
   } else if (/\b(?:pico|rp2040|synth|audio|i2s|dac|midi)\b/i.test(prompt)) {
